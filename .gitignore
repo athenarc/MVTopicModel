@@ -1,5 +1,12 @@
-.*
-!.gitignore
-!.gitkeep
-/target/
-/logs/
+## all hiddens
+#.*
+## but:
+#!.gitignore
+#!.gitkeep
+
+target
+logs
+# output/
+# intellij
+.idea
+*.iml
