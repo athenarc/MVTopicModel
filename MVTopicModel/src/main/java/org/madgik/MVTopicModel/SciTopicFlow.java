@@ -112,6 +112,7 @@ public class SciTopicFlow {
         if (StringUtils.isBlank(experimentId)) {
             experimentId = experimentString;
         }
+        logger.info(String.format("Experiment ID: %s", experimentId));
 
         if (findKeyPhrases) {
             FindKeyPhrasesPerTopic(SQLConnectionString, experimentId, "openNLP");
@@ -260,6 +261,7 @@ public class SciTopicFlow {
             pruneMaxPerc = Double.parseDouble(prop.getProperty("PruneMaxPerc"));
             SQLConnectionString = prop.getProperty("SQLConnectionString");
             experimentId = prop.getProperty("ExperimentId");
+            limitDocs = Integer.parseInt(prop.getProperty("limitDocs"));
 
         } catch (Exception e) {
             logger.error("Exception in reading properties: " + e);

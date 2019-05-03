@@ -57,7 +57,7 @@
                 <activeByDefault>false</activeByDefault>
             </activation>
             <properties>
-                <pom.model.path>/home/sissy/Documents/Others/cardu/TopicModel/</pom.model.path>
+                <pom.model.path>path/to/trained/model</pom.model.path>
             </properties>
         </profile>
     </profiles>
