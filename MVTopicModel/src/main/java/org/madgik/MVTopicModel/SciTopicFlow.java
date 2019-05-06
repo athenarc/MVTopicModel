@@ -6,7 +6,6 @@ import cc.mallet.util.Maths;
 import com.sree.textbytes.jtopia.Configuration;
 import com.sree.textbytes.jtopia.TermDocument;
 import com.sree.textbytes.jtopia.TermsExtractor;
-import gnu.trove.map.hash.TObjectIntHashMap;
 
 import java.util.*;
 import java.io.*;
@@ -21,7 +20,6 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 
 import org.madgik.utils.CSV2FeatureSequence;
-import org.madgik.utils.FeatureSequenceRemovePlural;
 import org.madgik.utils.Utils;
 
 import static org.madgik.utils.Utils.cosineSimilarity;
@@ -72,8 +70,8 @@ public class SciTopicFlow {
     boolean calcEntitySimilarities = true;
     boolean calcTopicSimilarities = false;
     boolean calcPPRSimilarities = false;
-    boolean runTopicModelling = true;
-    boolean runWordEmbeddings = false;
+    boolean doRunTopicModelling = true;
+    boolean doRunWordEmbeddings = false;
     boolean useTypeVectors = false;
     boolean trainTypeVectors = false;
     boolean findKeyPhrases = false;
@@ -96,16 +94,12 @@ public class SciTopicFlow {
 
         String dictDir = "";
 
-        Connection connection = null;
-
         getPropValues(runtimeProp);
 
         String experimentString = experimentType.toString() + "_" + numTopics + "T_"
                 + numIterations + "IT_" + numChars + "CHRs_" + numModalities + "M_" + (trainTypeVectors ? "WV" : "") + ((limitDocs > 0) ? ("Lmt_" + limitDocs) : "") + PPRenabled.name();
 
         String experimentDetails = String.format("Multi View Topic Modeling Analysis \n pruneMaxPerc:%.1f  pruneCntPerc:%.4f pruneLblCntPerc:%.4f burnIn:%d numOfThreads:%d similarityType:%s", this.pruneMaxPerc, pruneCntPerc, pruneLblCntPerc, burnIn, numOfThreads, similarityType.toString());
-
-        String experimentDescription = experimentString + ": \n";
 
         if (runtimeProp != null) {
             experimentId = runtimeProp.get("ExperimentId");
@@ -120,92 +114,12 @@ public class SciTopicFlow {
             FindKeyPhrasesPerTopic(SQLConnectionString, experimentId, "openNLP");
         }
 
-        if (runWordEmbeddings) {
-            logger.info(" calc word embeddings starting");
-            InstanceList[] instances = GenerateAlphabets(SQLConnectionString, experimentType, dictDir, numModalities, pruneCntPerc,
-                    pruneLblCntPerc, pruneMaxPerc, numChars, PPRenabled,
-                    false, limitDocs);
-
-            logger.info(" instances added through pipe");
-
-            //int numDimensions = 50;
-            int windowSizeOption = 5;
-            int numSamples = 5;
-            int numEpochs = 5;
-            WordEmbeddings matrix = new WordEmbeddings(instances[0].getDataAlphabet(), vectorSize, windowSizeOption);
-            //TopicWordEmbeddings matrix = new TopicWordEmbeddings(instances[0].getDataAlphabet(), vectorSize, windowSizeOption,0);
-            matrix.queryWord = "skin";
-            matrix.countWords(instances[0], 0.0001); //Sampling factor : "Down-sample words that account for more than ~2.5x this proportion or the corpus."
-            matrix.train(instances[0], numOfThreads, numSamples, numEpochs);
-            logger.info(" calc word embeddings ended");
-            //PrintWriter out = new PrintWriter("vectors.txt");
-            //matrix.write(out);
-            //out.close();
-            matrix.write(SQLConnectionString, 0);
-            logger.info(" writing word embeddings ended");
+        if (doRunWordEmbeddings) {
+            runWordEmbeddings(dictDir);
         }
 
-        if (runTopicModelling) {
-
-            logger.info(" TopicModelling has started");
-            String batchId = "-1";
-            InstanceList[] instances = GenerateAlphabets(SQLConnectionString, experimentType, dictDir, numModalities, pruneCntPerc,
-                    pruneLblCntPerc, pruneMaxPerc, numChars, PPRenabled,
-                    false, limitDocs);
-            logger.info("Instances added through pipe");
-
-            double beta = 0.01;
-            double[] betaMod = new double[numModalities];
-            Arrays.fill(betaMod, 0.01);
-            boolean useCycleProposals = false;
-            double alpha = 0.1;
-
-            double[] alphaSum = new double[numModalities];
-            Arrays.fill(alphaSum, 1);
-
-            double[] gamma = new double[numModalities];
-            Arrays.fill(gamma, 1);
-
-            //double gammaRoot = 4;
-            FastQMVWVParallelTopicModel model = new FastQMVWVParallelTopicModel(numTopics, numModalities, alpha, beta, useCycleProposals, SQLConnectionString, useTypeVectors, useTypeVectorsProb, trainTypeVectors);
-
-            model.CreateTables(SQLConnectionString, experimentId);
-
-            // ParallelTopicModel model = new ParallelTopicModel(numTopics, 1.0, 0.01);
-            model.setNumIterations(numIterations);
-            model.setTopicDisplay(showTopicsInterval, topWords);
-            // model.setIndependentIterations(independentIterations);
-            model.optimizeInterval = optimizeInterval;
-            model.burninPeriod = burnIn;
-            model.setNumThreads(numOfThreads);
-
-            model.addInstances(instances, batchId, vectorSize, "");//trainingInstances);//instances);
-            logger.info(" instances added");
-
-            //model.readWordVectorsDB(SQLConnectionString, vectorSize);
-            model.estimate();
-            logger.info("Model estimated");
-
-            model.saveResults(SQLConnectionString, experimentId, experimentDetails);
-            logger.info("Model saved");
-
-            logger.info("Model Id: \n" + experimentId);
-            logger.info("Model Metadata: \n" + model.getExpMetadata());
-
-            //if (modelEvaluationFile != null) {
-            try {
-
-                double perplexity = 0;
-
-                FastQMVWVTopicModelDiagnostics diagnostics = new FastQMVWVTopicModelDiagnostics(model, topWords);
-                diagnostics.saveToDB(SQLConnectionString, experimentId, perplexity, batchId);
-                logger.info("full diagnostics calculation finished");
-
-            } catch (Exception e) {
-
-                logger.error(e.getMessage());
-            }
-
+        if (doRunTopicModelling) {
+            runTopicModelling(dictDir, experimentDetails);
         }
         if (calcTopicDistributionsAndTrends) {
 
@@ -227,6 +141,98 @@ public class SciTopicFlow {
         if (calcPPRSimilarities) {
             calcPPRSimilarities(SQLConnectionString);
         }
+
+    }
+    public void runWordEmbeddings(String dictDir){
+        logger.info(" calc word embeddings starting");
+        InstanceList[] instances = GenerateAlphabets(SQLConnectionString, experimentType, dictDir, numModalities, pruneCntPerc,
+                pruneLblCntPerc, pruneMaxPerc, numChars, PPRenabled,
+                false, limitDocs);
+
+        logger.info(" instances added through pipe");
+
+        //int numDimensions = 50;
+        int windowSizeOption = 5;
+        int numSamples = 5;
+        int numEpochs = 5;
+        WordEmbeddings matrix = new WordEmbeddings(instances[0].getDataAlphabet(), vectorSize, windowSizeOption);
+        //TopicWordEmbeddings matrix = new TopicWordEmbeddings(instances[0].getDataAlphabet(), vectorSize, windowSizeOption,0);
+        matrix.queryWord = "skin";
+        matrix.countWords(instances[0], 0.0001); //Sampling factor : "Down-sample words that account for more than ~2.5x this proportion or the corpus."
+        matrix.train(instances[0], numOfThreads, numSamples, numEpochs);
+        logger.info(" calc word embeddings ended");
+        //PrintWriter out = new PrintWriter("vectors.txt");
+        //matrix.write(out);
+        //out.close();
+        matrix.write(SQLConnectionString, 0);
+        logger.info(" writing word embeddings ended");
+
+    }
+    public void runTopicModelling(String dictDir, String experimentDetails){
+        logger.info(" TopicModelling has started");
+        String batchId = "-1";
+        InstanceList[] instances = GenerateAlphabets(SQLConnectionString, experimentType, dictDir, numModalities, pruneCntPerc,
+                pruneLblCntPerc, pruneMaxPerc, numChars, PPRenabled,
+                false, limitDocs);
+        logger.info("Instances added through pipe");
+
+        double beta = 0.01;
+        double[] betaMod = new double[numModalities];
+        Arrays.fill(betaMod, 0.01);
+        boolean useCycleProposals = false;
+        double alpha = 0.1;
+
+        double[] alphaSum = new double[numModalities];
+        Arrays.fill(alphaSum, 1);
+
+        double[] gamma = new double[numModalities];
+        Arrays.fill(gamma, 1);
+
+        //double gammaRoot = 4;
+        FastQMVWVParallelTopicModel model = new FastQMVWVParallelTopicModel(numTopics, numModalities, alpha, beta, useCycleProposals, SQLConnectionString, useTypeVectors, useTypeVectorsProb, trainTypeVectors);
+
+        model.CreateTables(SQLConnectionString, experimentId);
+
+        // ParallelTopicModel model = new ParallelTopicModel(numTopics, 1.0, 0.01);
+        model.setNumIterations(numIterations);
+        model.setTopicDisplay(showTopicsInterval, topWords);
+        // model.setIndependentIterations(independentIterations);
+        model.optimizeInterval = optimizeInterval;
+        model.burninPeriod = burnIn;
+        model.setNumThreads(numOfThreads);
+
+        model.addInstances(instances, batchId, vectorSize, "");//trainingInstances);//instances);
+        logger.info(" instances added");
+
+        //model.readWordVectorsDB(SQLConnectionString, vectorSize);
+        try {
+            model.estimate();
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.exit(1);
+        }
+        logger.info("Model estimated");
+
+        model.saveResults(SQLConnectionString, experimentId, experimentDetails);
+        logger.info("Model saved");
+
+        logger.info("Model Id: \n" + experimentId);
+        logger.info("Model Metadata: \n" + model.getExpMetadata());
+
+        //if (modelEvaluationFile != null) {
+        try {
+
+            double perplexity = 0;
+
+            FastQMVWVTopicModelDiagnostics diagnostics = new FastQMVWVTopicModelDiagnostics(model, topWords);
+            diagnostics.saveToDB(SQLConnectionString, experimentId, perplexity, batchId);
+            logger.info("full diagnostics calculation finished");
+
+        } catch (Exception e) {
+
+            logger.error(e.getMessage());
+        }
+
 
     }
 
@@ -262,11 +268,13 @@ public class SciTopicFlow {
             pruneLblCntPerc = Double.parseDouble(prop.getProperty("PruneLblCntPerc"));
             pruneMaxPerc = Double.parseDouble(prop.getProperty("PruneMaxPerc"));
             SQLConnectionString = prop.getProperty("SQLConnectionString");
+            if (SQLConnectionString == null) throw new Exception("SQL params missing");
             experimentId = prop.getProperty("ExperimentId");
             limitDocs = Integer.parseInt(prop.getProperty("limitDocs"));
 
         } catch (Exception e) {
             logger.error("Exception in reading properties: " + e);
+            System.exit(1);
         } finally {
             inputStream.close();
         }
@@ -309,7 +317,7 @@ public class SciTopicFlow {
 //            prop.setProperty("pruneMaxPerc", pruneMaxPerc);
 //            prop.setProperty("pruneMinPerc", pruneMinPerc);
 //            prop.setProperty("calcEntitySimilarities", calcEntitySimilarities);
-//            prop.setProperty("runTopicModelling", runTopicModelling);
+//            prop.setProperty("doRunTopicModelling", doRunTopicModelling);
 //            prop.setProperty("findKeyPhrases", findKeyPhrases);
 //            prop.setProperty("PPRenabled", PPRenabled);
 //           
@@ -1483,7 +1491,8 @@ public class SciTopicFlow {
         pipeListText.add(new Input2CharSequence()); //homer
         pipeListText.add(new CharSequenceLowercase());
 
-        SimpleTokenizer tokenizer = new SimpleTokenizer(new File("stoplists/en.txt"));
+        String stoplistsPath = ClassLoader.getSystemResource("en.txt").getPath();
+        SimpleTokenizer tokenizer = new SimpleTokenizer(new File(stoplistsPath));
         pipeListText.add(tokenizer);
 
         Alphabet alphabet = new Alphabet();
@@ -1751,6 +1760,7 @@ public class SciTopicFlow {
             // if the error message is "out of memory", 
             // it probably means no database file is found
             logger.error(e.getMessage());
+            System.exit(1);
 
         } finally {
             try {
@@ -1863,6 +1873,7 @@ public class SciTopicFlow {
         return instances;
 
     }
+
 
     public static void main(String[] args) throws Exception {
         Class.forName("org.postgresql.Driver");
