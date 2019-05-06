@@ -3,6 +3,9 @@
 ## but:
 #!.gitignore
 #!.gitkeep
+#
+# current configuration
+MVTopicModel/src/main/resources/config.properties
 
 target
 logs
