@@ -48,15 +48,15 @@ public class Utils {
 
     static Stack<Long> timestack = new Stack<>();
     public static void tic(){
-        Utils.timestack.push(System.nanoTime());
+        Utils.timestack.push(System.currentTimeMillis());
     }
     public static void toc(String msg){
-        long millis = System.nanoTime() - Utils.timestack.pop();
+        long millis = System.currentTimeMillis() - Utils.timestack.pop();
         String outmsg =  String.format("[%s] took: ", msg);
-        if (TimeUnit.MILLISECONDS.toDays(millis) > 0) outmsg += String.format("%d days", TimeUnit.MILLISECONDS.toDays(millis));
-        if (TimeUnit.MILLISECONDS.toHours(millis) > 0) outmsg += String.format("%d hours", TimeUnit.MILLISECONDS.toHours(millis));
-        if (TimeUnit.MILLISECONDS.toMinutes(millis) > 0) outmsg += String.format("%d minutes", TimeUnit.MILLISECONDS.toMinutes(millis));
-        outmsg += String.format("%d seconds", TimeUnit.MILLISECONDS.toSeconds(millis) - TimeUnit.MILLISECONDS.toSeconds(TimeUnit.MILLISECONDS.toMinutes(millis)));
+        if (TimeUnit.MILLISECONDS.toDays(millis) > 0) outmsg += String.format(" %d days", TimeUnit.MILLISECONDS.toDays(millis));
+        if (TimeUnit.MILLISECONDS.toHours(millis) > 0) outmsg += String.format(" %d hours", TimeUnit.MILLISECONDS.toHours(millis));
+        if (TimeUnit.MILLISECONDS.toMinutes(millis) > 0) outmsg += String.format(" %d minutes", TimeUnit.MILLISECONDS.toMinutes(millis));
+        outmsg += String.format(" %d seconds", TimeUnit.MILLISECONDS.toSeconds(millis) - TimeUnit.MILLISECONDS.toSeconds(TimeUnit.MILLISECONDS.toMinutes(millis)));
         System.out.println(outmsg);
     }
 

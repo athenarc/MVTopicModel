@@ -315,7 +315,7 @@ public class PTMFlow {
 //            prop.setProperty("pruneMaxPerc", pruneMaxPerc);
 //            prop.setProperty("pruneMinPerc", pruneMinPerc);
 //            prop.setProperty("calcEntitySimilarities", calcEntitySimilarities);
-//            prop.setProperty("runTopicModelling", runTopicModelling);
+//            prop.setProperty("doRunTopicModelling", doRunTopicModelling);
 //            prop.setProperty("findKeyPhrases", findKeyPhrases);
 //            prop.setProperty("PPRenabled", PPRenabled);
 //           
