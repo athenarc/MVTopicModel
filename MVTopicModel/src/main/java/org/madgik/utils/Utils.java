@@ -60,4 +60,11 @@ public class Utils {
         System.out.println(outmsg);
     }
 
+    public boolean isAlphanumeric(String str) {
+        return str.matches("^(?!.*(-[^-]*-|_[^_]*_))[A-Za-z0-9][\\w-]*[A-Za-z0-9]$");
+        //Pattern p = Pattern.compile("[^a-zA-Z0-9]+$");
+    }
+
+
+
 }
