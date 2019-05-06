@@ -22,6 +22,8 @@ import org.apache.log4j.Logger;
 
 import org.madgik.utils.CSV2FeatureSequence;
 import org.madgik.utils.FeatureSequenceRemovePlural;
+import org.madgik.utils.Utils;
+
 import static org.madgik.utils.Utils.cosineSimilarity;
 
 public class SciTopicFlow {
@@ -1575,10 +1577,12 @@ public class SciTopicFlow {
             }
 
             logger.info(" Getting text from the database");
+            Utils.tic();
             // get txt data 
             Statement txtstatement = connection.createStatement();
             txtstatement.setFetchSize(10000);
             ResultSet rstxt = txtstatement.executeQuery(txtsql);
+            Utils.toc("Getting text from the database");
 
             while (rstxt.next()) {
 
@@ -1599,9 +1603,11 @@ public class SciTopicFlow {
 
             if (numModalities > 1) {
                 logger.info(" Getting side info from the database");
+                Utils.tic();
                 Statement statement = connection.createStatement();
                 statement.setFetchSize(10000);
                 ResultSet rs = statement.executeQuery(sql);
+                Utils.toc("Getting non-text views data");
 
                 while (rs.next()) {
                     // read the result set
