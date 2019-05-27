@@ -32,5 +32,5 @@ Example results (multi view topics on Full ACM & OpenAccess PubMed corpora):
 https://1drv.ms/f/s!Aul4avjcWIHpg-Ara0PZzqHeOkyGIw
 
 ### Running from Command line 
-Topic modeling: java -Xms2G -Xmx28G -cp  "MVTopicModel-1.0-SNAPSHOT.jar;lib/*" org.madgik.MVTopicModel.PTMFlow
+Topic modeling: java -Xms2G -Xmx28G -cp  "MVTopicModel-1.0-SNAPSHOT.jar;lib/*" org.madgik.MVTopicModel.SciTopicFlow
 Semantic Annotation: java -Xms2G -Xmx28G -cp  "MVTopicModel-1.0-SNAPSHOT.jar;lib/*" org.madgik.dbpediaspotlightclient.DBpediaAnnotator
