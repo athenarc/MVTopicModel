@@ -1,5 +1,8 @@
 package org.madgik.MVTopicModel;
 
+import edu.stanford.nlp.util.Quadruple;
+import edu.stanford.nlp.util.Triple;
+import org.apache.commons.lang3.tuple.Pair;
 import org.madgik.utils.FastQDelta;
 import org.madgik.utils.MixTopicModelTopicAssignment;
 import org.madgik.utils.FTree;
@@ -176,7 +179,9 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         return ret;
     }
 
-    public FastQMVWVParallelTopicModel(int numberOfTopics, byte numModalities, double alpha, double beta, boolean useCycleProposals, String SQLConnectionString, boolean useTypeVectors, double vectorsLambda, boolean trainTypeVectors) {
+    public FastQMVWVParallelTopicModel(int numberOfTopics, byte numModalities, double alpha, double beta,
+                                       boolean useCycleProposals, String SQLConnectionString, boolean useTypeVectors,
+                                       double vectorsLambda, boolean trainTypeVectors) {
 
         this.SQLConnectionString = SQLConnectionString;
         this.useTypeVectors = useTypeVectors;
@@ -1451,6 +1456,189 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
     }
 
+   public void gatherTopics(){
+
+
+       ArrayList<Quadruple<Integer, Byte, String, Double>> topicData = new ArrayList<>();
+       ArrayList<Triple<Integer, String, Integer>> phraseData = new ArrayList<>();
+
+       // gather per-topic basic information
+       ArrayList<ArrayList<TreeSet<IDSorter>>> topicSortedWords = new ArrayList<>(numModalities);
+       for (Byte m = 0; m < numModalities; m++) topicSortedWords.add(getSortedWords(m));
+       for (int topic = 0; topic < numTopics; topic++) {
+           for (Byte m = 0; m < numModalities; m++) {
+
+               TreeSet<IDSorter> sortedWords = topicSortedWords.get(m).get(topic);
+               int word = 1;
+               Iterator<IDSorter> iterator = sortedWords.iterator();
+               //int activeNumWords = Math.min(40, 7 * (int) Math.round(topicsDiscrWeight[m][topic] * topicTypeCount));
+               while (iterator.hasNext() && word < 50) {
+                   IDSorter info = iterator.next();
+                   topicData.add(new Quadruple<>(topic, m, alphabet[m].lookupObject(info.getID()).toString(), info.getWeight()));
+                   word++;
+               }
+           }
+       }
+
+       // find and gather phrase data
+       TObjectIntHashMap<String>[] phrases = findTopicPhrases();
+       for (int ti = 0; ti < numTopics; ti++) {
+
+           // Print phrases
+           Object[] keys = phrases[ti].keys();
+           int[] values = phrases[ti].values();
+           double counts[] = new double[keys.length];
+           for (int i = 0; i < counts.length; i++) counts[i] = values[i];
+
+           // double countssum = MatrixOps.sum(counts);
+           Alphabet alph = new Alphabet(keys);
+           RankedFeatureVector rfv = new RankedFeatureVector(alph, counts);
+           int max = rfv.numLocations() < 20 ? rfv.numLocations() : 20;
+           for (int ri = 0; ri < max; ri++) {
+               int fi = rfv.getIndexAtRank(ri);
+               double count = counts[fi];// / countssum;
+               String phraseStr = alph.lookupObject(fi).toString();
+               phraseData.add(new Triple(ti, phraseStr, count));
+           }
+       }
+
+       String boostSelect = String.format("select  \n"
+               + " a.experimentid, PhraseCnts, textcnts, textcnts/phrasecnts as boost\n"
+               + "from \n"
+               + "(select experimentid, itemtype, avg(counts) as PhraseCnts from topicanalysis\n"
+               + "where itemtype=-1\n"
+               + "group by experimentid, itemtype) a inner join\n"
+               + "(select experimentid, itemtype, avg(counts) as textcnts from topicanalysis\n"
+               + "where itemtype=0  and ExperimentId = '%s' \n"
+               + "group by experimentid, itemtype) b on a.experimentId=b.experimentId\n"
+               + "order by a.experimentId;", experimentId);
+       float boost = 70;
+       ResultSet rs = statement.executeQuery(boostSelect);
+       while (rs.next()) {
+           boost = rs.getFloat("boost");
+       }
+
+       PreparedStatement bulkInsert = null;
+       String sql = "insert into Experiment (ExperimentId  ,    Description,    Metadata  ,    InitialSimilarity,    PhraseBoost, ended) values(?,?,?, ?, ?,? );";
+
+       try {
+           connection.setAutoCommit(false);
+           bulkInsert = connection.prepareStatement(sql);
+
+           bulkInsert.setString(1, experimentId);
+           bulkInsert.setString(2, experimentDescription);
+           bulkInsert.setString(3, expMetadata.toString());
+           bulkInsert.setDouble(4, 0.6);
+           bulkInsert.setInt(5, Math.round(boost));
+
+           //Date date =
+           LocalDateTime now = LocalDateTime.now();
+           Timestamp timestamp = Timestamp.valueOf(now);
+
+           bulkInsert.setTimestamp(6, timestamp);
+
+           bulkInsert.executeUpdate();
+
+           connection.commit();
+
+       } catch (SQLException e) {
+
+           logger.error("Exception in save Topics: " + e.getMessage());
+           if (connection != null) {
+               try {
+
+                   logger.error("Transaction is being rolled back");
+                   connection.rollback();
+               } catch (SQLException excep) {
+                   logger.error("Error in insert experiment details");
+               }
+           }
+       } finally {
+
+           if (bulkInsert != null) {
+               bulkInsert.close();
+           }
+           connection.setAutoCommit(true);
+       }
+
+       try {
+
+           String insertTopicDescriptionSql = "INSERT into Topic (Title, Category, id , VisibilityIndex, ExperimentId )\n"
+                   + "select substr(string_agg(Item,','),1,100), '' , topicId , 1, '" + experimentId + "' \n"
+                   + "from  Topic_View\n"
+                   + " where experimentID = '" + experimentId + "' \n"
+                   + " GROUP BY TopicID";
+
+           connection = DriverManager.getConnection(SQLConnectionString);
+           statement = connection.createStatement();
+           statement.executeUpdate(insertTopicDescriptionSql);
+           //ResultSet rs = statement.executeQuery(sql);
+
+       } catch (SQLException e) {
+           // if the error message is "out of memory",
+           // it probably means no database file is found
+           logger.error("Exception in save Topics: " + e.getMessage());
+       } finally {
+            /*try {
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                // connection close failed.
+                logger.error(e);
+            }
+             */
+       }
+
+       String topicDetailInsertsql = "insert into TopicDetails values(?,?,?,?,?,? );";
+       PreparedStatement bulkTopicDetailInsert = null;
+
+       try {
+           connection.setAutoCommit(false);
+           bulkTopicDetailInsert = connection.prepareStatement(topicDetailInsertsql);
+
+           for (int topic = 0; topic < numTopics; topic++) {
+               for (Byte m = 0; m < numModalities; m++) {
+
+                   bulkTopicDetailInsert.setInt(1, topic);
+                   bulkTopicDetailInsert.setInt(2, m);
+                   bulkTopicDetailInsert.setDouble(3, alpha[m][topic]);
+                   bulkTopicDetailInsert.setInt(4, tokensPerTopic[m].get(topic));
+                   bulkTopicDetailInsert.setString(5, batchId);
+                   bulkTopicDetailInsert.setString(6, experimentId);
+
+                   bulkTopicDetailInsert.executeUpdate();
+               }
+           }
+
+           connection.commit();
+
+       } catch (SQLException e) {
+           logger.error("Exception in save Topics: " + e.getMessage());
+
+           if (connection != null) {
+               try {
+                   logger.error("Transaction is being rolled back");
+                   connection.rollback();
+               } catch (SQLException excep) {
+                   logger.error("Error in insert topic details");
+               }
+           }
+       } finally {
+
+           if (bulkTopicDetailInsert != null) {
+               bulkTopicDetailInsert.close();
+           }
+           connection.setAutoCommit(true);
+       }
+
+
+
+
+
+   }
+
+
     public void saveTopics(String SQLConnectionString, String experimentId, String batchId, String experimentDescription) {
 
         Connection connection = null;
@@ -1501,7 +1689,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
                     }
 
-                    // also find and write phrases 
+                    // also find and write phrases
                     TObjectIntHashMap<String>[] phrases = findTopicPhrases();
 
                     for (int ti = 0; ti < numTopics; ti++) {
@@ -1599,7 +1787,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                 bulkInsert.setDouble(4, 0.6);
                 bulkInsert.setInt(5, Math.round(boost));
 
-                //Date date = 
+                //Date date =
                 LocalDateTime now = LocalDateTime.now();
                 Timestamp timestamp = Timestamp.valueOf(now);
 
@@ -1643,7 +1831,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                 //ResultSet rs = statement.executeQuery(sql);
 
             } catch (SQLException e) {
-                // if the error message is "out of memory", 
+                // if the error message is "out of memory",
                 // it probably means no database file is found
                 logger.error("Exception in save Topics: " + e.getMessage());
             } finally {
@@ -1701,7 +1889,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             }
 
         } catch (SQLException e) {
-            // if the error message is "out of memory", 
+            // if the error message is "out of memory",
             // it probably means no database file is found
             System.err.println(e.getMessage());
         } finally {
@@ -2941,46 +3129,6 @@ public class FastQMVWVParallelTopicModel implements Serializable {
     }
 
     public void CreateTables(String SQLConnectionString, String experimentId) {
-        Connection connection = null;
-        Statement statement = null;
-        try {
-            // create a database connection
-            if (!SQLConnectionString.isEmpty()) {
-                connection = DriverManager.getConnection(SQLConnectionString);
-                statement = connection.createStatement();
-
-                statement.executeUpdate(String.format("Delete from doc_topic where  ExperimentId = '%s'", experimentId));
-
-                String deleteSQL = String.format("Delete from Experiment where  ExperimentId = '%s'", experimentId);
-                statement.executeUpdate(deleteSQL);
-
-                deleteSQL = String.format("Delete from TopicDetails where  ExperimentId = '%s'", experimentId);
-                statement.executeUpdate(deleteSQL);
-
-                deleteSQL = String.format("Delete from Topic where  ExperimentId = '%s'", experimentId);
-                statement.executeUpdate(deleteSQL);
-
-                deleteSQL = String.format("Delete from TopicAnalysis where  ExperimentId = '%s'", experimentId);
-                statement.executeUpdate(deleteSQL);
-
-                deleteSQL = String.format("Delete from ExpDiagnostics where  ExperimentId = '%s'", experimentId);
-                statement.executeUpdate(deleteSQL);
-            }
-        } catch (SQLException e) {
-            // if the error message is "out of memory", 
-            // it probably means no database file is found
-            System.err.println(e.getMessage());
-        } finally {
-            try {
-                if (connection != null) {
-                    connection.close();
-                }
-            } catch (SQLException e) {
-                // connection close failed.
-                System.err.println(e);
-            }
-
-        }
     }
 
     public void printState(File f) throws IOException {
