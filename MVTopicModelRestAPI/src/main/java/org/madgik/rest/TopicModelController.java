@@ -19,6 +19,6 @@ public class TopicModelController {
 
     @RequestMapping("/hello")
     public String welcome() {
-        return "Welcome to RestTemplate Example.";
+        return "Up and running.";
     }
 }
