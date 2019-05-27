@@ -5,6 +5,7 @@ import cc.mallet.types.SparseVector;
 import cc.mallet.util.Maths;
 import org.apache.commons.lang.StringUtils;
 import org.madgik.MVTopicModel.SciTopicFlow;
+import org.madgik.config.Config;
 import org.madgik.model.TopicVector;
 
 import java.sql.*;
@@ -16,9 +17,17 @@ import static org.madgik.MVTopicModel.SciTopicFlow.logger;
 import static org.madgik.utils.Utils.cosineSimilarity;
 
 public class TrendCalculator {
+    public void setConfig(Config config) {
+        this.config = config;
+    }
 
+    Config config;
+    public void CalcEntityTopicDistributionsAndTrends(String experimentId){
 
-    public static void CalcEntityTopicDistributionsAndTrends(String SQLConnectionString, String experimentId, SciTopicFlow.ExperimentType experimentType) throws SQLException {
+        if (! config.isCalcTopicDistributionsAndTrends()) return;
+        String SQLConnectionString = config.getDataSourceParams();
+        Config.ExperimentType experimentType = config.getExperimentType();
+
         Connection connection = null;
         try {
 
@@ -46,7 +55,7 @@ public class TrendCalculator {
             statement.executeUpdate(SQLstr);
             //statement.executeUpdate(SQLstr);
 
-            if (experimentType == SciTopicFlow.ExperimentType.ACM) {
+            if (experimentType == Config.ExperimentType.ACM) {
 
                 logger.info("Trend Topic distribution for the whole coprus");
 
@@ -165,7 +174,7 @@ public class TrendCalculator {
 
             }
 
-            if (experimentType == SciTopicFlow.ExperimentType.PubMed) {
+            if (experimentType == Config.ExperimentType.PubMed) {
 
                 logger.info("Trend Topic distribution for the whole coprus");
 
@@ -273,10 +282,19 @@ public class TrendCalculator {
     }
 
 
-    public static void calcSimilarities(String SQLConnectionString, SciTopicFlow.ExperimentType experimentType, String experimentId, boolean ACMAuthorSimilarity, SciTopicFlow.SimilarityType similarityType, int numTopics) {
+    public void calcSimilarities(String experimentId) {
+
+        if (!config.isCalcEntitySimilarities()) return;
+
+        String SQLConnectionString = config.getDataSourceParams();
         //calc similarities
+        Config.ExperimentType experimentType = config.getExperimentType();
+        int numTopics = config.getNumTopics();
+        boolean ACMAuthorSimilarity = config.isACMAuthorSimilarity();
+        Config.SimilarityType similarityType = config.getSimilarityType();
 
         logger.info("similarities calculation Started");
+
         Connection connection = null;
         try {
             // create a database connection
@@ -337,7 +355,7 @@ public class TrendCalculator {
 
             HashMap<String, SparseVector> labelVectors = null;
             HashMap<String, double[]> similarityVectors = null;
-            if (similarityType == SciTopicFlow.SimilarityType.cos) {
+            if (similarityType == Config.SimilarityType.cos) {
                 labelVectors = new HashMap<String, SparseVector>();
             } else {
                 similarityVectors = new HashMap<String, double[]>();
@@ -370,7 +388,7 @@ public class TrendCalculator {
                 }
 
                 if (!newLabelId.equals(labelId) && !labelId.isEmpty()) {
-                    if (similarityType == SciTopicFlow.SimilarityType.cos) {
+                    if (similarityType == Config.SimilarityType.cos) {
                         labelVectors.put(labelId, new SparseVector(topics, weights, topics.length, topics.length, true, true, true));
                     } else {
                         similarityVectors.put(labelId, weights);
@@ -403,7 +421,7 @@ public class TrendCalculator {
                 connection.setAutoCommit(false);
                 bulkInsert = connection.prepareStatement(sql);
 
-                if (similarityType == SciTopicFlow.SimilarityType.Jen_Sha_Div) {
+                if (similarityType == Config.SimilarityType.Jen_Sha_Div) {
                     for (String fromGrantId : similarityVectors.keySet()) {
                         boolean startCalc = false;
 
@@ -425,7 +443,7 @@ public class TrendCalculator {
                             }
                         }
                     }
-                } else if (similarityType == SciTopicFlow.SimilarityType.cos) {
+                } else if (similarityType == Config.SimilarityType.cos) {
                     for (String fromGrantId : labelVectors.keySet()) {
                         boolean startCalc = false;
 
@@ -484,7 +502,11 @@ public class TrendCalculator {
     }
 
 
-    public static void CalcTopicSimilarities(String SQLConnectionString, String experimentId) {
+    public void CalcTopicSimilarities(String experimentId) {
+
+        if (!config.isCalcTopicSimilarities()) return;
+
+        String SQLConnectionString = config.getDataSourceParams();
 
         Connection connection = null;
         try {
@@ -597,7 +619,10 @@ public class TrendCalculator {
         logger.info("Topic similarities calculation finished");
     }
 
-    public static void calcPPRSimilarities(String SQLConnectionString) {
+    public void calcPPRSimilarities() {
+
+        if (!config.isCalcPPRSimilarities()) return;
+        String SQLConnectionString = config.getDataSourceParams();
         //calc similarities
 
         //logger.info("PPRSimilarities calculation Started");
@@ -719,5 +744,15 @@ public class TrendCalculator {
         logger.info("Pub citation similarities calculation finished");
     }
 
+    /**
+     * Perform post-topic modelling analysis as per the configuration flags
+     * @param experimentId
+     */
+    public void doPostAnalysis(String experimentId){
+        this.CalcEntityTopicDistributionsAndTrends(experimentId);
+        this.calcSimilarities(experimentId);
+        this.CalcTopicSimilarities(experimentId);
+        this.calcPPRSimilarities();
+    }
 
 }
