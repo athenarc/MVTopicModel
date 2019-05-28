@@ -41,6 +41,12 @@ public class TrendCalculator {
 
             logger.info("Insert Full Topic Distribution ");
 
+            /**
+             * From doc_topic:
+             * experiment == current
+             * weight: > 0.1
+             */
+
             String SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
                     + "select '',  doc_topic.TopicId, '', 'Corpus', round(sum(weight)/SumTopicWeightView.SumWeight, 5) as NormWeight, doc_topic.ExperimentId\n"
                     + "from doc_topic\n"
@@ -53,126 +59,7 @@ public class TrendCalculator {
                     + "Order by  NormWeight Desc";
 
             statement.executeUpdate(SQLstr);
-            //statement.executeUpdate(SQLstr);
 
-            if (experimentType == Config.ExperimentType.ACM) {
-
-                logger.info("Trend Topic distribution for the whole coprus");
-
-                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                        + "select Document.BatchId,  doc_topic.TopicId, '', 'CorpusTrend', \n"
-                        + "round(sum(weight)/SumTopicWeightPerBatchView.BatchSumWeight,5) as NormWeight,  doc_topic.ExperimentId\n"
-                        + "from doc_topic\n"
-                        + "Inner Join Document on doc_topic.docid= document.docid and doc_topic.weight>0.1\n"
-                        + "INNER JOIN (SELECT Document.BatchId, sum(weight) AS BatchSumWeight, ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "INNER JOIN Document ON doc_topic.docid= Document.docid AND\n"
-                        + "doc_topic.weight>0.1\n "
-                        + "and doc_topic.ExperimentId='" + experimentId + "'   \n"
-                        + "GROUP BY Document.BatchId, ExperimentId) SumTopicWeightPerBatchView on SumTopicWeightPerBatchView.BatchId = Document.BatchId and SumTopicWeightPerBatchView.ExperimentId= doc_topic.ExperimentId\n"
-                        + "group By Document.BatchId,SumTopicWeightPerBatchView.BatchSumWeight, doc_topic.TopicId, doc_topic.ExperimentId\n"
-                        + "Order by Document.BatchId,   NormWeight Desc";
-
-                logger.info("Author Topic distribution");
-
-                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                        + "SELECT '', doc_topic.TopicId, Doc_author.AuthorId,'Author',\n"
-                        + "                              round(sum(doc_topic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
-                        + "                                doc_topic.ExperimentId\n"
-                        + "                         FROM doc_topic\n"
-                        + "                         INNER JOIN  Doc_author ON doc_topic.Docid = Doc_author.Docid AND doc_topic.weight > 0.1\n"
-                        + "      and  doc_topic.ExperimentId='" + experimentId + "' \n"
-                        + "                              INNER JOIN (SELECT Doc_author.authorid, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
-                        + "                              FROM doc_topic\n"
-                        + "                              INNER JOIN   Doc_author ON doc_topic.Docid = Doc_author.Docid AND  doc_topic.weight > 0.1\n"
-                        + "                              GROUP BY  ExperimentId,Doc_author.AuthorId)\n"
-                        + "                              SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.AuthorId = Doc_author.AuthorId AND \n"
-                        + "                                                              SumTopicWeightPerProjectView.ExperimentId = doc_topic.ExperimentId                                        \n"
-                        + "                        GROUP BY Doc_author.AuthorId,\n"
-                        + "                                 SumTopicWeightPerProjectView.ProjectSumWeight,\n"
-                        + "                                 doc_topic.TopicId,\n"
-                        + "                                 doc_topic.ExperimentId\n"
-                        + "                                 order by  doc_topic.ExperimentId, Doc_author.AuthorId, NormWeight Desc,doc_topic.ExperimentId";
-
-                statement.executeUpdate(SQLstr);
-
-                logger.info("Journal Topic distribution");
-
-                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                        + "SELECT '', doc_topic.TopicId, Doc_journal.issn,'Journal',\n"
-                        + "round(sum(doc_topic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
-                        + "doc_topic.ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "INNER JOIN  doc_journal ON doc_topic.Docid = doc_journal.Docid AND doc_topic.weight > 0.1\n"
-                        + " and  doc_topic.ExperimentId='" + experimentId + "' \n"
-                        + "INNER JOIN (SELECT doc_journal.issn, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "INNER JOIN   doc_journal ON doc_topic.Docid = doc_journal.Docid AND  doc_topic.weight > 0.1\n"
-                        + "GROUP BY  ExperimentId,doc_journal.issn) SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.issn = doc_journal.issn AND SumTopicWeightPerProjectView.ExperimentId = doc_topic.ExperimentId                                        \n"
-                        + "GROUP BY doc_journal.issn,SumTopicWeightPerProjectView.ProjectSumWeight,doc_topic.TopicId, doc_topic.ExperimentId\n"
-                        + "order by  doc_topic.ExperimentId, doc_journal.issn, NormWeight Desc,doc_topic.ExperimentId";
-
-                statement.executeUpdate(SQLstr);
-
-                logger.info("Journal Trend Topic distribution");
-
-                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                        + "SELECT Document.batchId, doc_topic.TopicId, doc_journal.issn,'JournalTrend',\n"
-                        + "round(sum(doc_topic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight, doc_topic.ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "INNER JOIN Document on doc_topic.docid= document.docid and doc_topic.weight>0.1\n"
-                        + " and  doc_topic.ExperimentId='" + experimentId + "' \n"
-                        + "INNER JOIN  doc_journal ON doc_topic.docid = doc_journal.docid                           \n"
-                        + "INNER JOIN (SELECT doc_journal.issn, document.batchId, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "Inner Join Document on doc_topic.docid= document.docid and doc_topic.weight>0.1           \n"
-                        + "INNER JOIN   doc_journal ON doc_topic.docid = doc_journal.docid                                \n"
-                        + "GROUP BY  doc_journal.issn,Document.batchId,ExperimentId) SumTopicWeightPerProjectView \n"
-                        + "ON SumTopicWeightPerProjectView.issn = doc_journal.issn AND SumTopicWeightPerProjectView.ExperimentId = doc_topic.ExperimentId  AND SumTopicWeightPerProjectView.batchId = Document.batchId\n"
-                        + "GROUP BY doc_journal.issn,Document.batchId, SumTopicWeightPerProjectView.ProjectSumWeight,doc_topic.TopicId,doc_topic.ExperimentId\n"
-                        + "order by  doc_topic.ExperimentId, doc_journal.issn, NormWeight Desc,doc_topic.ExperimentId";
-
-                statement.executeUpdate(SQLstr);
-
-                logger.info("Conference Topic distribution");
-
-                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                        + "SELECT '', doc_topic.TopicId, doc_conference.acronymBase,'Conference',\n"
-                        + "round(sum(doc_topic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
-                        + "doc_topic.ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "INNER JOIN  doc_conference ON doc_topic.Docid = doc_conference.Docid AND doc_topic.weight > 0.1\n"
-                        + " and  doc_topic.ExperimentId='" + experimentId + "' \n"
-                        + "INNER JOIN (SELECT doc_conference.acronymBase, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "INNER JOIN   doc_conference ON doc_topic.Docid = doc_conference.Docid AND  doc_topic.weight > 0.1\n"
-                        + "GROUP BY  ExperimentId,doc_conference.acronymBase) SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.acronymBase = doc_conference.acronymBase AND SumTopicWeightPerProjectView.ExperimentId = doc_topic.ExperimentId                                        \n"
-                        + "GROUP BY doc_conference.acronymBase,SumTopicWeightPerProjectView.ProjectSumWeight,doc_topic.TopicId, doc_topic.ExperimentId\n"
-                        + "order by  doc_topic.ExperimentId, doc_conference.acronymBase, NormWeight Desc,doc_topic.ExperimentId";
-
-                statement.executeUpdate(SQLstr);
-
-                logger.info("Conference Trend Topic distribution");
-
-                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                        + " SELECT Document.batchId, doc_topic.TopicId, doc_conference.acronymBase,'ConferenceTrend',\n"
-                        + "round(sum(doc_topic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight, doc_topic.ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "INNER JOIN Document on doc_topic.docid= document.docid and doc_topic.weight>0.1\n"
-                        + " and  doc_topic.ExperimentId='" + experimentId + "' \n"
-                        + "INNER JOIN  doc_conference ON doc_topic.docid = doc_conference.docid                           \n"
-                        + "INNER JOIN (SELECT doc_conference.acronymBase, document.batchId, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "Inner Join Document on doc_topic.docid= document.docid and doc_topic.weight>0.1           \n"
-                        + "INNER JOIN   doc_conference ON doc_topic.docid = doc_conference.docid                                \n"
-                        + "GROUP BY  doc_conference.acronymBase,Document.batchId,ExperimentId) SumTopicWeightPerProjectView \n"
-                        + "ON SumTopicWeightPerProjectView.acronymBase = doc_conference.acronymBase AND SumTopicWeightPerProjectView.ExperimentId = doc_topic.ExperimentId  AND SumTopicWeightPerProjectView.batchId = Document.batchId\n"
-                        + "GROUP BY doc_conference.acronymBase,Document.batchId, SumTopicWeightPerProjectView.ProjectSumWeight,doc_topic.TopicId,doc_topic.ExperimentId\n"
-                        + "order by  doc_topic.ExperimentId, doc_conference.acronymBase, NormWeight Desc,doc_topic.ExperimentId";
-
-                statement.executeUpdate(SQLstr);
-
-            }
 
             if (experimentType == Config.ExperimentType.PubMed) {
 
@@ -260,7 +147,6 @@ public class TrendCalculator {
                         + "order by  doc_topic.ExperimentId, doc_funder_view.funder, NormWeight Desc,doc_topic.ExperimentId";
 
                 statement.executeUpdate(SQLstr);
-
             }
             logger.info("Entity and trends topic distribution finished");
 
@@ -316,37 +202,6 @@ public class TrendCalculator {
                             + "                                                        and EntityTopicDistribution.EntityId in (Select ProjectId FROM Doc_Project GROUP BY ProjectId HAVING Count(*)>4)\n";
 
                     break;
-                case ACM:
-                    if (ACMAuthorSimilarity) {
-                        entityType = "Author";
-                        sql = "select EntityTopicDistribution.EntityId as authorId, EntityTopicDistribution.TopicId, EntityTopicDistribution.NormWeight as Weight \n"
-                                + "                            from EntityTopicDistribution\n"
-                                + "                            where EntityTopicDistribution.EntityType='Author' AND EntityTopicDistribution.EntityId<>'' AND\n"
-                                + "                            EntityTopicDistribution.experimentId= '" + experimentId + "'   and EntityTopicDistribution.NormWeight>0.03\n"
-                                + "                            and EntityTopicDistribution.EntityId in (Select AuthorId FROM doc_author GROUP BY AuthorId HAVING Count(*)>4)\n"
-                                + "                            and EntityTopicDistribution.topicid in (select TopicId from topic \n"
-                                + "                            where topic.experimentId='" + experimentId + "' and topic.VisibilityIndex>0)";
-
-                    } else {
-                        entityType = "JournalConference";
-                        sql = "select EntityTopicDistribution.EntityId as VenueId, EntityTopicDistribution.TopicId  as TopicId, EntityTopicDistribution.NormWeight as Weight \n"
-                                + "                                                          from EntityTopicDistribution\n"
-                                + "                                                          where EntityTopicDistribution.EntityType='Journal' AND EntityTopicDistribution.EntityId<>'' AND\n"
-                                + "                                                          EntityTopicDistribution.experimentId= '" + experimentId + "'   and EntityTopicDistribution.NormWeight>0.03\n"
-                                + "                                                          and EntityTopicDistribution.EntityId in (Select ISSN FROM doc_journal GROUP BY ISSN HAVING Count(*)>100)\n"
-                                + "                                                          and EntityTopicDistribution.topicid in (select TopicId from topicdescription \n"
-                                + "                                                          where topicdescription.experimentId='" + experimentId + "' and topicdescription.VisibilityIndex=1)\n"
-                                + "          UNION                                                \n"
-                                + "select EntityTopicDistribution.EntityId as VenueId, EntityTopicDistribution.TopicId as TopicId, EntityTopicDistribution.NormWeight as Weight \n"
-                                + "                                                          from EntityTopicDistribution\n"
-                                + "                                                          where EntityTopicDistribution.EntityType='Conference' AND EntityTopicDistribution.EntityId<>'' AND\n"
-                                + "                                                          EntityTopicDistribution.experimentId= '" + experimentId + "'   and EntityTopicDistribution.NormWeight>0.03\n"
-                                + "                                                          and EntityTopicDistribution.EntityId in (Select SeriesId FROM doc_conference GROUP BY SeriesId HAVING Count(*)>400)\n"
-                                + "                                                          and EntityTopicDistribution.topicid in (select TopicId from topicdescription \n"
-                                + "                                                          where topicdescription.experimentId='" + experimentId + "' and topicdescription.VisibilityIndex=1)";
-                    }
-
-                    break;
                 default:
             }
 
@@ -375,15 +230,6 @@ public class TrendCalculator {
                     case PubMed:
                         newLabelId = rs.getString("projectId");
                         break;
-
-                    case ACM:
-                        if (ACMAuthorSimilarity) {
-                            newLabelId = rs.getString("AuthorId");
-                        } else {
-                            newLabelId = rs.getString("VenueId");
-                        }
-                        break;
-
                     default:
                 }
 
@@ -755,4 +601,17 @@ public class TrendCalculator {
         this.calcPPRSimilarities();
     }
 
+    public static void main(String[] args) {
+        String SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
+                    + "select '',  doc_topic.TopicId, '', 'Corpus', round(sum(weight)/SumTopicWeightView.SumWeight, 5) as NormWeight, doc_topic.ExperimentId\n"
+                    + "from doc_topic\n"
+                    + "INNER JOIN (SELECT  sum(weight) AS SumWeight, ExperimentId\n"
+                    + "FROM doc_topic\n"
+                    + "Where doc_topic.weight>0.1 \n"
+                    + " and doc_topic.ExperimentId='" + "PubMed_500T_550IT_7000CHRs_4M_OneWay" + "'  \n"
+                    + "GROUP BY  ExperimentId) SumTopicWeightView on SumTopicWeightView.ExperimentId= doc_topic.ExperimentId\n"
+                    + "group By doc_topic.TopicId, doc_topic.ExperimentId, SumTopicWeightView.SumWeight\n"
+                    + "Order by  NormWeight Desc";
+        System.out.println(SQLstr);
+    }
 }

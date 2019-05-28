@@ -135,8 +135,8 @@ public class SciTopicFlow {
         model.setNumIterations(config.getNumIterations());
         model.setTopicDisplay(config.getShowTopicsInterval(), config.getNumTopWords());
         // model.setIndependentIterations(independentIterations);
-        model.optimizeInterval = config.getOptimizeInterval();
-        model.burninPeriod = config.getBurnIn();
+        model.setOptimizeInterval(config.getOptimizeInterval());
+        model.setBurninPeriod(config.getBurnIn());
         model.setNumThreads(config.getNumOfThreads());
 
         model.addInstances(instances, batchId, 200, config.getInitModelFile());//trainingInstances);//instances);
@@ -151,12 +151,11 @@ public class SciTopicFlow {
         }
         logger.info("Model estimated");
 
-
-        output.saveResults();
-        model.saveResults(config.getDataSourceParams(), experimentId, experimentDetails);
+        output.saveResults(model.getTopicData(), model.getPhraseData(), model.getTopicDetails(), batchId, config.getExperimentId(), experimentDetails, model.getExperimentMetadata());
+        // model.saveResults(config.getDataSourceParams(), experimentId, experimentDetails);
         logger.info("Model saved");
 
-        logger.info("Model Id: \n" + experimentId);
+        logger.info("Model Id: \n" + config.getExperimentId());
         logger.info("Model Metadata: \n" + model.getExpMetadata());
 
         //if (modelEvaluationFile != null) {
@@ -165,11 +164,12 @@ public class SciTopicFlow {
             double perplexity = 0;
 
             FastQMVWVTopicModelDiagnostics diagnostics = new FastQMVWVTopicModelDiagnostics(model, config.getNumTopWords());
-            diagnostics.saveToDB(config.getDataSourceParams(), experimentId, perplexity, batchId);
+            output.saveDiagnostics(config.getNumModalities(), batchId, config.getExperimentId(), model.getPerplexities(),
+                    config.getNumTopics(), diagnostics.getDiagnostics());
+            diagnostics.saveToDB(config.getDataSourceParams(), config.getExperimentId(), 0, batchId);
             logger.info("full diagnostics calculation finished");
 
         } catch (Exception e) {
-
             logger.error(e.getMessage());
         }
 

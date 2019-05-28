@@ -1,6 +1,9 @@
 package org.madgik.io;
 
 import cc.mallet.types.Instance;
+import edu.stanford.nlp.util.Quadruple;
+import edu.stanford.nlp.util.Triple;
+import org.madgik.MVTopicModel.FastQMVWVTopicModelDiagnostics;
 import org.madgik.config.Config;
 
 import java.io.*;
@@ -32,6 +35,7 @@ public class SerializedFileTMDataSource extends FileTMDataSource {
     }
 
     Object readObject(String inpath){
+        logger.info("Reading serialized object from path " + inpath);
         // serialize for testing
         ObjectInputStream in = null;
         try {
@@ -69,6 +73,26 @@ public class SerializedFileTMDataSource extends FileTMDataSource {
 
     @Override
     public void prepareTopicKeyphraseWrite(Map<Integer, Map<String, List<Integer>>> topicTitles, String experimentId, String keyphraseTagger) {
+
+    }
+
+    @Override
+    public void prepareOutput(String experimentId) {
+
+    }
+
+    @Override
+    public void saveResults(ArrayList<Quadruple<Integer, Byte, String, Double>> topicData, ArrayList<Triple<Integer, String, Integer>> phraseData, ArrayList<Quadruple<Integer, Byte, Double, Integer>> topicDetails, String batchId, String experimentId, String experimentDescription, String experimentMetadata) {
+
+    }
+
+    @Override
+    public void saveDiagnostics(int numModalities, String batchId, String experimentId, double[][] perplexities, int numTopics, ArrayList<FastQMVWVTopicModelDiagnostics.TopicScores> diagnostics) {
+
+    }
+
+    @Override
+    public void prepareTopicDistroTrendsOutput(String experimentId) {
 
     }
 }
