@@ -1456,11 +1456,33 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
     }
 
+    ArrayList<Quadruple<Integer, Byte, String, Double>> topicData;
+    ArrayList<Triple<Integer, String, Integer>> phraseData;
+
+    public ArrayList<Quadruple<Integer, Byte, String, Double>> getTopicData() {
+        return topicData;
+    }
+
+    public ArrayList<Triple<Integer, String, Integer>> getPhraseData() {
+        return phraseData;
+    }
+
+    public ArrayList<Quadruple<Integer, Byte, Double, Integer>> getTopicDetails() {
+        return topicDetails;
+    }
+
+    ArrayList<Quadruple<Integer, Byte, Double, Integer>> topicDetails;
+
+    public String getExperimentMetadata(){
+        return this.expMetadata.toString();
+    }
+
    public void gatherTopics(){
 
 
-       ArrayList<Quadruple<Integer, Byte, String, Double>> topicData = new ArrayList<>();
-       ArrayList<Triple<Integer, String, Integer>> phraseData = new ArrayList<>();
+       topicData = new ArrayList<>();
+       topicDetails = new ArrayList<>();
+       phraseData = new ArrayList<>();
 
        // gather per-topic basic information
        ArrayList<ArrayList<TreeSet<IDSorter>>> topicSortedWords = new ArrayList<>(numModalities);
@@ -1501,141 +1523,11 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                phraseData.add(new Triple(ti, phraseStr, count));
            }
        }
-
-       String boostSelect = String.format("select  \n"
-               + " a.experimentid, PhraseCnts, textcnts, textcnts/phrasecnts as boost\n"
-               + "from \n"
-               + "(select experimentid, itemtype, avg(counts) as PhraseCnts from topicanalysis\n"
-               + "where itemtype=-1\n"
-               + "group by experimentid, itemtype) a inner join\n"
-               + "(select experimentid, itemtype, avg(counts) as textcnts from topicanalysis\n"
-               + "where itemtype=0  and ExperimentId = '%s' \n"
-               + "group by experimentid, itemtype) b on a.experimentId=b.experimentId\n"
-               + "order by a.experimentId;", experimentId);
-       float boost = 70;
-       ResultSet rs = statement.executeQuery(boostSelect);
-       while (rs.next()) {
-           boost = rs.getFloat("boost");
+       // gather topic details
+       for (int topic = 0; topic < numTopics; topic++) {
+           for (Byte m = 0; m < numModalities; m++)
+               topicDetails.add(new Quadruple<>(topic, m, alpha[m][topic], tokensPerTopic[m].get(topic)));
        }
-
-       PreparedStatement bulkInsert = null;
-       String sql = "insert into Experiment (ExperimentId  ,    Description,    Metadata  ,    InitialSimilarity,    PhraseBoost, ended) values(?,?,?, ?, ?,? );";
-
-       try {
-           connection.setAutoCommit(false);
-           bulkInsert = connection.prepareStatement(sql);
-
-           bulkInsert.setString(1, experimentId);
-           bulkInsert.setString(2, experimentDescription);
-           bulkInsert.setString(3, expMetadata.toString());
-           bulkInsert.setDouble(4, 0.6);
-           bulkInsert.setInt(5, Math.round(boost));
-
-           //Date date =
-           LocalDateTime now = LocalDateTime.now();
-           Timestamp timestamp = Timestamp.valueOf(now);
-
-           bulkInsert.setTimestamp(6, timestamp);
-
-           bulkInsert.executeUpdate();
-
-           connection.commit();
-
-       } catch (SQLException e) {
-
-           logger.error("Exception in save Topics: " + e.getMessage());
-           if (connection != null) {
-               try {
-
-                   logger.error("Transaction is being rolled back");
-                   connection.rollback();
-               } catch (SQLException excep) {
-                   logger.error("Error in insert experiment details");
-               }
-           }
-       } finally {
-
-           if (bulkInsert != null) {
-               bulkInsert.close();
-           }
-           connection.setAutoCommit(true);
-       }
-
-       try {
-
-           String insertTopicDescriptionSql = "INSERT into Topic (Title, Category, id , VisibilityIndex, ExperimentId )\n"
-                   + "select substr(string_agg(Item,','),1,100), '' , topicId , 1, '" + experimentId + "' \n"
-                   + "from  Topic_View\n"
-                   + " where experimentID = '" + experimentId + "' \n"
-                   + " GROUP BY TopicID";
-
-           connection = DriverManager.getConnection(SQLConnectionString);
-           statement = connection.createStatement();
-           statement.executeUpdate(insertTopicDescriptionSql);
-           //ResultSet rs = statement.executeQuery(sql);
-
-       } catch (SQLException e) {
-           // if the error message is "out of memory",
-           // it probably means no database file is found
-           logger.error("Exception in save Topics: " + e.getMessage());
-       } finally {
-            /*try {
-                if (connection != null) {
-                    connection.close();
-                }
-            } catch (SQLException e) {
-                // connection close failed.
-                logger.error(e);
-            }
-             */
-       }
-
-       String topicDetailInsertsql = "insert into TopicDetails values(?,?,?,?,?,? );";
-       PreparedStatement bulkTopicDetailInsert = null;
-
-       try {
-           connection.setAutoCommit(false);
-           bulkTopicDetailInsert = connection.prepareStatement(topicDetailInsertsql);
-
-           for (int topic = 0; topic < numTopics; topic++) {
-               for (Byte m = 0; m < numModalities; m++) {
-
-                   bulkTopicDetailInsert.setInt(1, topic);
-                   bulkTopicDetailInsert.setInt(2, m);
-                   bulkTopicDetailInsert.setDouble(3, alpha[m][topic]);
-                   bulkTopicDetailInsert.setInt(4, tokensPerTopic[m].get(topic));
-                   bulkTopicDetailInsert.setString(5, batchId);
-                   bulkTopicDetailInsert.setString(6, experimentId);
-
-                   bulkTopicDetailInsert.executeUpdate();
-               }
-           }
-
-           connection.commit();
-
-       } catch (SQLException e) {
-           logger.error("Exception in save Topics: " + e.getMessage());
-
-           if (connection != null) {
-               try {
-                   logger.error("Transaction is being rolled back");
-                   connection.rollback();
-               } catch (SQLException excep) {
-                   logger.error("Error in insert topic details");
-               }
-           }
-       } finally {
-
-           if (bulkTopicDetailInsert != null) {
-               bulkTopicDetailInsert.close();
-           }
-           connection.setAutoCommit(true);
-       }
-
-
-
-
-
    }
 
 
@@ -3329,6 +3221,11 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         return new MarginalProbEstimator(numTopics, alpha[0], (double) gamma[0] * alphaSum[0], beta[0],
                 typeTopicCounts[0], a);
     }
+
+    public double[][] getPerplexities(){
+        return this.perplexities;
+    }
+
     // Serialization
     private static final long serialVersionUID = 1;
     private static final int CURRENT_SERIAL_VERSION = 0;

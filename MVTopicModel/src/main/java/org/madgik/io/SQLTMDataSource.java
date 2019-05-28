@@ -1,11 +1,15 @@
 package org.madgik.io;
 
 import cc.mallet.types.Instance;
+import edu.stanford.nlp.util.Quadruple;
+import edu.stanford.nlp.util.Triple;
+import org.madgik.MVTopicModel.FastQMVWVTopicModelDiagnostics;
 import org.madgik.config.Config;
 import org.madgik.utils.Utils;
 
 import java.io.*;
 import java.sql.*;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -64,7 +68,7 @@ public class SQLTMDataSource extends TMDataSource {
     private ResultSet query(String sqlQuery){
         Statement statement = null;
         try {
-            statement = connection.createStatement();
+            statement = getConnection().createStatement();
             return statement.executeQuery(sqlQuery);
         } catch (SQLException e) {
             logger.error(e.getMessage());
@@ -194,6 +198,301 @@ public class SQLTMDataSource extends TMDataSource {
         }
     }
 
+    @Override
+    public void saveResults(ArrayList<Quadruple<Integer, Byte, String, Double>> topicData,
+            ArrayList<Triple<Integer, String, Integer>> phraseData,
+            ArrayList<Quadruple<Integer, Byte, Double, Integer>> topicDetails, String batchId, String experimentId,
+                            String experimentDescription, String experimentMetadata){
+
+
+        PreparedStatement bulkInsert = null;
+        try {
+
+            // Save Topic Analysis
+            String sql = "insert into TopicAnalysis values(?,?,?,?,?,?);";
+            getConnection().setAutoCommit(false);
+            bulkInsert = getConnection().prepareStatement(sql);
+
+            for(int i=0;i<topicData.size();++i){
+                bulkInsert.setInt(1, topicData.get(i).first);
+                bulkInsert.setInt(2, topicData.get(i).second);
+                bulkInsert.setString(3, topicData.get(i).third);
+                bulkInsert.setDouble(4, topicData.get(i).fourth);
+                bulkInsert.setString(5, batchId);
+                bulkInsert.setString(6, experimentId);
+                bulkInsert.executeUpdate();
+            }
+
+
+            // Save Topic Analysis
+            for (int i=0;i<phraseData.size();++i) {
+                    bulkInsert.setInt(1, phraseData.get(i).first);
+                    bulkInsert.setInt(2, -1);
+                    bulkInsert.setString(3, phraseData.get(i).second);
+                    bulkInsert.setDouble(4, phraseData.get(i).third);
+                    bulkInsert.setString(5, batchId);
+                    bulkInsert.setString(6, experimentId);
+                    //bulkInsert.setDouble(6, 1);
+                    bulkInsert.executeUpdate();
+                }
+                connection.commit();
+
+        } catch (SQLException e) {
+            logger.error("Exception in save Topics: " + e.getMessage());
+            //System.err.print(e.getMessage());
+            if (connection != null) {
+                try {
+                    logger.error("Transaction is being rolled back");
+                    connection.rollback();
+                } catch (SQLException excep) {
+                    logger.error("Error in insert topicAnalysis");
+                }
+            }
+        } finally {
+
+            if (bulkInsert != null) {
+                try {
+                    bulkInsert.close();
+                    connection.setAutoCommit(true);
+                } catch (SQLException ex) {
+                    logger.error(ex.getMessage());
+                }
+            }
+        }
+
+
+        try{
+            String boostSelect = String.format("select  \n"
+                    + " a.experimentid, PhraseCnts, textcnts, textcnts/phrasecnts as boost\n"
+                    + "from \n"
+                    + "(select experimentid, itemtype, avg(counts) as PhraseCnts from topicanalysis\n"
+                    + "where itemtype=-1\n"
+                    + "group by experimentid, itemtype) a inner join\n"
+                    + "(select experimentid, itemtype, avg(counts) as textcnts from topicanalysis\n"
+                    + "where itemtype=0  and ExperimentId = '%s' \n"
+                    + "group by experimentid, itemtype) b on a.experimentId=b.experimentId\n"
+                    + "order by a.experimentId;", experimentId);
+            float boost = 70;
+            ResultSet rs = query(boostSelect);
+            while (rs.next()) {
+                boost = rs.getFloat("boost");
+            }
+            bulkInsert = null;
+            String sql = "insert into Experiment (ExperimentId  ,    Description,    Metadata  ,    InitialSimilarity,    PhraseBoost, ended) values(?,?,?, ?, ?,? );";
+            connection.setAutoCommit(false);
+            bulkInsert = connection.prepareStatement(sql);
+            bulkInsert.setString(1, experimentId);
+            bulkInsert.setString(2, experimentDescription);
+            bulkInsert.setString(3, experimentMetadata);
+            bulkInsert.setDouble(4, 0.6);
+            bulkInsert.setInt(5, Math.round(boost));
+            bulkInsert.setTimestamp(6, Timestamp.valueOf(LocalDateTime.now()));
+            bulkInsert.executeUpdate();
+            connection.commit();
+
+        } catch (SQLException e) {
+            logger.error("Exception in save Topics: " + e.getMessage());
+            if (connection != null) {
+                try {
+                    logger.error("Transaction is being rolled back");
+                    connection.rollback();
+                } catch (SQLException excep) {
+                    logger.error("Error in insert experiment details");
+                }
+            }
+        } finally {
+
+            try {
+                connection.setAutoCommit(true);
+                if (bulkInsert != null) bulkInsert.close();
+            }
+            catch (SQLException ex) {
+                    logger.error(ex.getMessage());
+           }
+        }
+
+            try {
+
+                String insertTopicDescriptionSql = "INSERT into Topic (Title, Category, id , VisibilityIndex, ExperimentId )\n"
+                        + "select substr(string_agg(Item,','),1,100), '' , topicId , 1, '" + experimentId + "' \n"
+                        + "from  Topic_View\n"
+                        + " where experimentID = '" + experimentId + "' \n"
+                        + " GROUP BY TopicID";
+                Statement statement = getConnection().createStatement();
+                statement.executeUpdate(insertTopicDescriptionSql);
+            } catch (SQLException e) {
+                // if the error message is "out of memory",
+                // it probably means no database file is found
+                logger.error("Exception in save Topics: " + e.getMessage());
+            } finally {
+                /*try {
+                    if (connection != null) {
+                        connection.close();
+                    }
+                } catch (SQLException e) {
+                    // connection close failed.
+                    logger.error(e);
+                }
+                 */
+            }
+
+            String topicDetailInsertsql = "insert into TopicDetails values(?,?,?,?,?,? );";
+            PreparedStatement bulkTopicDetailInsert = null;
+            bulkTopicDetailInsert = null;
+            try {
+                bulkTopicDetailInsert = connection.prepareStatement(topicDetailInsertsql);
+                connection.setAutoCommit(false);
+
+                for(int i=0;i<topicDetails.size();++i) {
+                        bulkTopicDetailInsert.setInt(1, topicDetails.get(i).first);
+                        bulkTopicDetailInsert.setInt(2, topicDetails.get(i).second);
+                        bulkTopicDetailInsert.setDouble(3, topicDetails.get(i).third);
+                        bulkTopicDetailInsert.setInt(4, topicDetails.get(i).fourth);
+                        bulkTopicDetailInsert.setString(5, batchId);
+                        bulkTopicDetailInsert.setString(6, experimentId);
+
+                        bulkTopicDetailInsert.executeUpdate();
+                 }
+                connection.commit();
+            } catch (SQLException e) {
+                logger.error("Exception in save Topics: " + e.getMessage());
+
+                if (connection != null) {
+                    try {
+                        logger.error("Transaction is being rolled back");
+                        connection.rollback();
+                    } catch (SQLException excep) {
+                        logger.error("Error in insert topic details");
+                    }
+                }
+            } finally {
+
+                try {
+                    if (bulkTopicDetailInsert != null) {
+                        bulkTopicDetailInsert.close();
+                    }
+                    connection.setAutoCommit(true);
+                } catch (SQLException ex) {
+                    logger.error(ex.getMessage());
+                }
+            }
+            logger.info("Done saving results.");
+
+    }
+
+    @Override
+    public void saveDiagnostics(int numModalities, String batchId, String experimentId, double[][] perplexities,
+                                int numTopics, ArrayList<FastQMVWVTopicModelDiagnostics.TopicScores> diagnostics) {
+        Connection connection = null;
+        double perplexity = 0;
+        String current_score = "";
+        try {
+            Statement statement = getConnection().createStatement();
+
+            PreparedStatement bulkInsert = null;
+            String sql = "insert into expDiagnostics values(?,?,?,?,?,?);";
+
+            connection.setAutoCommit(false);
+            bulkInsert = connection.prepareStatement(sql);
+
+            for (byte m = 0; m < numModalities; m++) {
+                current_score =  String.format("perplexity %d" , m);
+
+                bulkInsert.setString(1, experimentId);
+                bulkInsert.setString(2, batchId);
+                bulkInsert.setString(3, "TestCorpus");
+                bulkInsert.setInt(4, 0); //corpus
+                bulkInsert.setString(5, "perplexity");
+                bulkInsert.setDouble(6, perplexity);
+                bulkInsert.executeUpdate();
+
+                int p = 1;
+                while (p < perplexities[m].length && perplexities[m][p] != 0) //for (int p = 0; p < model.perplexities[m].length; p++)
+                {
+                    current_score =  String.format("LogLikehood %d %d", m,p);
+                    bulkInsert.setString(1, experimentId);
+                    bulkInsert.setString(2, batchId);
+                    bulkInsert.setString(3, String.format("%d", 10 * p));
+                    bulkInsert.setInt(4, 0); //corpus
+                    bulkInsert.setString(5, "LogLikehood");
+                    bulkInsert.setDouble(6, perplexities[m][p]);
+                    bulkInsert.executeUpdate();
+                    p++;
+                }
+            }
+
+            for (int topic = 0; topic < numTopics; topic++) {
+
+                for (FastQMVWVTopicModelDiagnostics.TopicScores scores : diagnostics) {
+                    current_score = scores.name+String.format(" Topic %d", topic);
+
+                    bulkInsert.setString(1, experimentId);
+                    bulkInsert.setString(2, batchId);
+                    bulkInsert.setString(3, String.format("Topic %d", topic));
+                    bulkInsert.setInt(4, 1); //Topic
+                    bulkInsert.setString(5, scores.name);
+                    bulkInsert.setDouble(6, scores.scores[topic]);
+                    bulkInsert.executeUpdate();
+                }
+
+//                for (int position = 0; position < topicTopWords[topic].length; position++) {
+//                    if (topicTopWords[topic][position] == null) {
+//                        break;
+//                    }
+//
+//                    formatter.format("  %s", topicTopWords[topic][position]);
+//                    for (TopicScores scores : diagnostics) {
+//                        if (scores.wordScoresDefined) {
+//                            formatter.format("\t%s=%.4f", scores.name, scores.topicWordScores[topic][position]);
+//                            bulkInsert.setString(1, experimentId);
+//                    bulkInsert.setString(2, String.format("Topic %d", topic));
+//                    bulkInsert.setInt(3, 1); //Word
+//                    bulkInsert.setString(4, scores.name);
+//                    bulkInsert.setDouble(5, scores.scores[topic]);
+//                    bulkInsert.executeUpdate();
+//                        }
+//                    }
+//
+//                }
+            }
+
+            connection.commit();
+            if (bulkInsert != null) {
+                bulkInsert.close();
+            }
+            connection.setAutoCommit(true);
+
+        } catch (SQLException e) {
+
+            logger.error("Exception in save diagnostics score ["+ current_score +"] : "+ e.getMessage());
+
+            if (connection != null) {
+                try {
+                    logger.error("Transaction is being rolled back \n");
+                    connection.rollback();
+                } catch (SQLException excep) {
+                    logger.error("Error in insert expDiagnostics \n");
+                }
+            }
+        } finally {
+        }
+    }
+
+    @Override
+    public void prepareTopicDistroTrendsOutput(String experimentId) {
+
+        try {
+            Statement statement = getConnection().createStatement();
+
+            logger.info("Calc topic Entity Topic Distributions and Trends started");
+            String deleteSQL = String.format("Delete from EntityTopicDistribution where ExperimentId= '%s'", experimentId);
+            statement.executeUpdate(deleteSQL);
+        } catch (SQLException e) {
+            logger.error(e.getMessage());
+        }
+
+    }
+
 
     public ArrayList<ArrayList<Instance>> getInputs(Config config){
         boolean D4I = true;
@@ -218,7 +517,7 @@ public class SQLTMDataSource extends TMDataSource {
             logger.debug("No serialized file.");
         }
         catch (IOException e) {
-            e.printStackTrace();
+        e.printStackTrace();
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
         }finally {
@@ -257,10 +556,10 @@ public class SQLTMDataSource extends TMDataSource {
                             + "having count(*) > 5) )\n"
                             + "Order by doctxt_view.docId \n"
                             + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");//+ " LIMIT 10000";
+                    }
                 }
-            }
 
-            if (experimentType == Config.ExperimentType.ACM) {
+                if (experimentType == Config.ExperimentType.ACM) {
 
                 if (PPRenabled == Config.Net2BoWType.PPR) {
                     sql = " select  docid,   citations, categories, period, keywords, venue, DBPediaResources from docsideinfo_view  " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
@@ -327,7 +626,7 @@ public class SQLTMDataSource extends TMDataSource {
                     switch (experimentType) {
 
                         case ACM:
-//                        instanceBuffer.get(0).add(new Instance(rs.getString("Text"), null, rs.getString("pubId"), "text"));
+        //                        instanceBuffer.get(0).add(new Instance(rs.getString("Text"), null, rs.getString("pubId"), "text"));
                             //String txt = rs.getString("text");
                             //instanceBuffer.get(0).add(new Instance(txt.substring(0, Math.min(txt.length() - 1, numChars)), null, rs.getString("pubId"), "text"));
 
@@ -375,7 +674,7 @@ public class SQLTMDataSource extends TMDataSource {
                                 }
                             }
 
-//DBPediaResources
+        //DBPediaResources
                             if (numModalities > 5) {
                                 String tmpStr = rs.getString("DBPediaResources");//.replace("\t", ",");
                                 String DBPediaResourceStr = "";

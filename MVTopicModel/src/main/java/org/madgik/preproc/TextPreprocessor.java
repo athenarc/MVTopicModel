@@ -26,13 +26,32 @@ public class TextPreprocessor {
 
     public InstanceList[] preprocess(ArrayList<ArrayList<Instance>> instanceBuffer, InstanceList[] instances, SimpleTokenizer tokenizer){
 
-        preprocessText(instanceBuffer, instances, tokenizer);
-        preprocessMetadata(instanceBuffer, instances);
-        return instances;
-    }
+        logger.info("Read " + instanceBuffer.get(0).size() + " instances modality: " + instanceBuffer.get(0).get(0).getSource().toString());
 
+        if (!config.isIgnoreText()) {
+            try {
+                int prunCnt = (int) Math.round(instanceBuffer.get(0).size() * config.getPruneCntPerc());
+                GenerateStoplist(tokenizer, instanceBuffer.get(0), prunCnt, config.getPruneMaxPerc(), false);
+                instances[0].addThruPipe(instanceBuffer.get(0).iterator());
+                //Alphabet tmpAlp = instances[0].getDataAlphabet();
+                //ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(new File(txtAlphabetFile)));
+                //oos.writeObject(tmpAlp);
+                //oos.close();
+            } catch (IOException e) {
+                logger.error("Problem adding text: "
+                        + e);
 
-    public void preprocessMetadata(ArrayList<ArrayList<Instance>> instanceBuffer, InstanceList[] instances){
+            }
+        }
+
+        for (byte m = config.isIgnoreText() ? (byte) 0 : (byte) 1; m < config.getNumModalities(); m++) {
+
+            logger.info("Read " + instanceBuffer.get(m).size() + " instances modality: " + (instanceBuffer.get(m).size() > 0 ? instanceBuffer.get(m).get(0).getSource().toString() : m));
+            //instances[m] = new InstanceList(new SerialPipes(pipeListCSV));
+            instances[m].addThruPipe(instanceBuffer.get(m).iterator());
+        }
+
+        logger.info(" instances added through pipe");
 
         // pruning for all other modalities no text
         for (byte m = config.isIgnoreText() ? (byte) 0 : (byte) 1; m < config.getNumModalities(); m++) {
@@ -71,9 +90,7 @@ public class TextPreprocessor {
                         FeatureSequence fs = (FeatureSequence) instance.getData();
 
                         int prCnt = (int) Math.round(instanceBuffer.get(m).size() * config.getPruneLblCntPerc());
-                        fs.prune(counts, newAlphabet, ((m == 4 && config.getExperimentType() == Config.ExperimentType.ACM
-                                && config.getPPRenabled() == Config.Net2BoWType.PPR) ||
-                                (m == 3 && config.getExperimentType() == Config.ExperimentType.PubMed)) ? prCnt * 4 : prCnt);
+                        fs.prune(counts, newAlphabet, ((m == 4 && config.getExperimentType() == Config.ExperimentType.ACM && config.getPPRenabled() == Config.Net2BoWType.PPR) || (m == 3 && config.getExperimentType() == Config.ExperimentType.PubMed)) ? prCnt * 4 : prCnt);
 
                         newInstanceList.add(newPipe.instanceFrom(new Instance(fs, instance.getTarget(),
                                 instance.getName(),
@@ -105,39 +122,120 @@ public class TextPreprocessor {
 
             }
         }
+        return instances;
 
-
-
+//        preprocessText(instanceBuffer, instances, tokenizer);
+//        preprocessMetadata(instanceBuffer, instances);
+//        return instances;
     }
 
-    public void preprocessText(ArrayList<ArrayList<Instance>> instanceBuffer, InstanceList[] instances, SimpleTokenizer tokenizer){
-        if (config.isIgnoreText()) {
-            // add as-is and exit
-            for (byte m = 0; m < config.getNumModalities(); m++) {
 
-                logger.info("Read " + instanceBuffer.get(m).size() + " instances modality: " +
-                        (instanceBuffer.get(m).size() > 0 ? instanceBuffer.get(m).get(0).getSource().toString() : m));
-                //instances[m] = new InstanceList(new SerialPipes(pipeListCSV));
-                instances[m].addThruPipe(instanceBuffer.get(m).iterator());
-            }
-            return;
-        }
-        // generate and link stoplist
-        try {
-            int prunCnt = (int) Math.round(instanceBuffer.get(0).size() * config.getPruneCntPerc());
-            GenerateStoplist(tokenizer, instanceBuffer.get(0), prunCnt, config.getPruneMaxPerc(), false);
-            instances[0].addThruPipe(instanceBuffer.get(0).iterator());
-            //Alphabet tmpAlp = instances[0].getDataAlphabet();
-            //ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(new File(txtAlphabetFile)));
-            //oos.writeObject(tmpAlp);
-            //oos.close();
-        } catch (IOException e) {
-            logger.error("Problem adding text: " + e);
-
-        }
-
-        logger.info("Preprocessed text instances added through pipe");
-    }
+//    public void preprocessMetadata(ArrayList<ArrayList<Instance>> instanceBuffer, InstanceList[] instances){
+//
+//        // pruning for all other modalities no text
+//        for (byte m = config.isIgnoreText() ? (byte) 0 : (byte) 1; m < config.getNumModalities(); m++) {
+//            if (config.getPruneLblCntPerc() > 0 & instances[m].size() > 10) {
+//
+//                // Check which type of data element the instances contain
+//                Instance firstInstance = instances[m].get(0);
+//                if (firstInstance.getData() instanceof FeatureSequence) {
+//                    // Version for feature sequences
+//
+//                    Alphabet oldAlphabet = instances[m].getDataAlphabet();
+//                    Alphabet newAlphabet = new Alphabet();
+//
+//                    // It's necessary to create a new instance list in
+//                    //  order to make sure that the data alphabet is correct.
+//                    Noop newPipe = new Noop(newAlphabet, instances[m].getTargetAlphabet());
+//                    InstanceList newInstanceList = new InstanceList(newPipe);
+//
+//                    // Iterate over the instances in the old list, adding
+//                    //  up occurrences of features.
+//                    int numFeatures = oldAlphabet.size();
+//                    double[] counts = new double[numFeatures];
+//                    for (int ii = 0; ii < instances[m].size(); ii++) {
+//                        Instance instance = instances[m].get(ii);
+//                        FeatureSequence fs = (FeatureSequence) instance.getData();
+//
+//                        fs.addFeatureWeightsTo(counts);
+//                    }
+//
+//                    Instance instance;
+//
+//                    // Next, iterate over the same list again, adding
+//                    //  each instance to the new list after pruning.
+//                    while (instances[m].size() > 0) {
+//                        instance = instances[m].get(0);
+//                        FeatureSequence fs = (FeatureSequence) instance.getData();
+//
+//                        int prCnt = (int) Math.round(instanceBuffer.get(m).size() * config.getPruneLblCntPerc());
+//                        fs.prune(counts, newAlphabet, ((m == 4 && config.getExperimentType() == Config.ExperimentType.ACM
+//                                && config.getPPRenabled() == Config.Net2BoWType.PPR) ||
+//                                (m == 3 && config.getExperimentType() == Config.ExperimentType.PubMed)) ? prCnt * 4 : prCnt);
+//
+//                        newInstanceList.add(newPipe.instanceFrom(new Instance(fs, instance.getTarget(),
+//                                instance.getName(),
+//                                instance.getSource())));
+//
+//                        instances[m].remove(0);
+//                    }
+//
+////                logger.info("features: " + oldAlphabet.size()
+//                    //                       + " -> " + newAlphabet.size());
+//                    // Make the new list the official list.
+//                    instances[m] = newInstanceList;
+//                    // Alphabet tmp = newInstanceList.getDataAlphabet();
+////                    String modAlphabetFile = dictDir + File.separator + "dict[" + m + "].txt";
+////                    try {
+////                        ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(new File(modAlphabetFile)));
+////                        oos.writeObject(tmp);
+////                        oos.close();
+////                    } catch (IOException e) {
+////                        logger.error("Problem serializing modality " + m + " alphabet to file "
+////                                + txtAlphabetFile + ": " + e);
+////                    }
+//
+//                } else {
+//                    throw new UnsupportedOperationException("Pruning features from "
+//                            + firstInstance.getClass().getName()
+//                            + " is not currently supported");
+//                }
+//
+//            }
+//        }
+//
+//
+//
+//    }
+//
+//    public void preprocessText(ArrayList<ArrayList<Instance>> instanceBuffer, InstanceList[] instances, SimpleTokenizer tokenizer){
+//        if (config.isIgnoreText()) {
+//            // add as-is and exit
+//            for (byte m = 0; m < config.getNumModalities(); m++) {
+//
+//                logger.info("Read " + instanceBuffer.get(m).size() + " instances modality: " +
+//                        (instanceBuffer.get(m).size() > 0 ? instanceBuffer.get(m).get(0).getSource().toString() : m));
+//                //instances[m] = new InstanceList(new SerialPipes(pipeListCSV));
+//                instances[m].addThruPipe(instanceBuffer.get(m).iterator());
+//            }
+//            return;
+//        }
+//        // generate and link stoplist
+//        try {
+//            int prunCnt = (int) Math.round(instanceBuffer.get(0).size() * config.getPruneCntPerc());
+//            GenerateStoplist(tokenizer, instanceBuffer.get(0), prunCnt, config.getPruneMaxPerc(), false);
+//            instances[0].addThruPipe(instanceBuffer.get(0).iterator());
+//            //Alphabet tmpAlp = instances[0].getDataAlphabet();
+//            //ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(new File(txtAlphabetFile)));
+//            //oos.writeObject(tmpAlp);
+//            //oos.close();
+//        } catch (IOException e) {
+//            logger.error("Problem adding text: " + e);
+//
+//        }
+//
+//        logger.info("Preprocessed text instances added through pipe");
+//    }
 
     private void GenerateStoplist(SimpleTokenizer prunedTokenizer, ArrayList<Instance> instanceBuffer, int pruneCount,
                                   double docProportionMaxCutoff, boolean preserveCase) throws IOException {

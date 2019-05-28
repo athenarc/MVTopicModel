@@ -37,6 +37,11 @@ public class FastQMVWVTopicModelDiagnostics {
      * The top N words in each topic in an array for easy access
      */
     String[][] topicTopWords;
+
+    public ArrayList<TopicScores> getDiagnostics() {
+        return diagnostics;
+    }
+
     ArrayList<TopicScores> diagnostics;
     FastQMVWVParallelTopicModel model;
     Alphabet alphabet;
