@@ -41,7 +41,8 @@ public abstract class TMDataSource {
                             ArrayList<Quadruple<Integer, Byte, Double, Integer>> topicDetails, String batchId, String experimentId,
                             String experimentDescription, String experimentMetadata);
 
-    public abstract void saveDiagnostics(int numModalities, String batchId, String experimentId, double[][] perplexities, int numTopics, ArrayList<FastQMVWVTopicModelDiagnostics.TopicScores> diagnostics);
+    public abstract void saveDiagnostics(int numModalities, String batchId, String experimentId, double[][] perplexities,
+                                         int numTopics, ArrayList<FastQMVWVTopicModelDiagnostics.TopicScores> diagnostics);
 
     // post-analysis
     public abstract void prepareTopicDistroTrendsOutput(String experimentId);

@@ -25,7 +25,9 @@ public class TrendCalculator {
     public void CalcEntityTopicDistributionsAndTrends(String experimentId){
 
         if (! config.isCalcTopicDistributionsAndTrends()) return;
-        String SQLConnectionString = config.getDataSourceParams();
+
+        // have to seperate input - output
+        String SQLConnectionString = config.getInputDataSourceParams();
         Config.ExperimentType experimentType = config.getExperimentType();
 
         Connection connection = null;
@@ -172,7 +174,7 @@ public class TrendCalculator {
 
         if (!config.isCalcEntitySimilarities()) return;
 
-        String SQLConnectionString = config.getDataSourceParams();
+        String SQLConnectionString = config.getOutputDataSourceParams();
         //calc similarities
         Config.ExperimentType experimentType = config.getExperimentType();
         int numTopics = config.getNumTopics();
@@ -352,7 +354,7 @@ public class TrendCalculator {
 
         if (!config.isCalcTopicSimilarities()) return;
 
-        String SQLConnectionString = config.getDataSourceParams();
+        String SQLConnectionString = config.getOutputDataSourceParams();
 
         Connection connection = null;
         try {
@@ -468,7 +470,7 @@ public class TrendCalculator {
     public void calcPPRSimilarities() {
 
         if (!config.isCalcPPRSimilarities()) return;
-        String SQLConnectionString = config.getDataSourceParams();
+        String SQLConnectionString = config.getOutputDataSourceParams();
         //calc similarities
 
         //logger.info("PPRSimilarities calculation Started");
@@ -595,6 +597,11 @@ public class TrendCalculator {
      * @param experimentId
      */
     public void doPostAnalysis(String experimentId){
+
+        System.out.println("Post-analysis is TODO!");
+        if (true)
+            return;
+
         this.CalcEntityTopicDistributionsAndTrends(experimentId);
         this.calcSimilarities(experimentId);
         this.CalcTopicSimilarities(experimentId);

@@ -1,5 +1,8 @@
 package org.madgik.MVTopicModel;
 
+import edu.stanford.nlp.util.Quadruple;
+import edu.stanford.nlp.util.Triple;
+import org.apache.commons.lang.ArrayUtils;
 import org.madgik.utils.MixTopicModelTopicAssignment;
 import java.io.*;
 import java.util.*;
@@ -17,6 +20,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import org.apache.log4j.Logger;
+import org.madgik.utils.Utils;
 
 public class FastQMVWVTopicModelDiagnostics {
 
@@ -844,6 +848,9 @@ public class FastQMVWVTopicModelDiagnostics {
             topicWordScores[topic][wordPosition] = score;
             wordScoresDefined = true;
         }
+        public Quadruple toQuadruple(){
+            return new Quadruple<String, Double[], Double[][], Boolean>(name, ArrayUtils.toObject(scores), Utils.toDouble2DObject(topicWordScores), wordScoresDefined);
+        }
     }
 
     public static void main(String[] args) throws Exception {
@@ -852,7 +859,7 @@ public class FastQMVWVTopicModelDiagnostics {
         int numTopics = Integer.parseInt(args[1]);
         byte mod = 1;
         FastQMVWVParallelTopicModel model = new FastQMVWVParallelTopicModel(numTopics, mod, 0.1, 0.01,
-                true, "", true, 0.6, true);
+                true, true, 0.6, true);
         model.addInstances(training, "", 1, "");
         model.setNumIterations(1000);
 

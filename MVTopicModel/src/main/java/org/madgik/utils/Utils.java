@@ -7,6 +7,8 @@ package org.madgik.utils;
 
 import static cc.mallet.types.MatrixOps.dotProduct;
 import static cc.mallet.types.MatrixOps.twoNorm;
+
+import org.apache.commons.lang.ArrayUtils;
 import org.knowceans.util.Vectors;
 
 import java.util.Stack;
@@ -66,5 +68,10 @@ public class Utils {
     }
 
 
-
+    public static Double [][] toDouble2DObject(double [][] in){
+        if (in.length ==0 ) return null;
+        Double [][]out = new Double[in.length][in[0].length];
+        for (int i=0;i<in.length;++i) out[i] = ArrayUtils.toObject(in[i]);
+        return out;
+    }
 }

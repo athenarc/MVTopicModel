@@ -54,6 +54,13 @@ public class Config extends Properties {
 
     String experimentId;
 
+    public String getExperimentDetails() {
+        return experimentDetails;
+    }
+
+    String
+            experimentDetails;
+
     public String getInitModelFile() {
         return initModelFile;
     }
@@ -118,26 +125,35 @@ public class Config extends Properties {
     }
 
     boolean ignoreText;
-
-
     boolean findKeyPhrases;
 
-    String DataSourceType;
-    String DataSourceParams;
+    String OutputDataSourceType;
+    String OutputDataSourceParams;
+    String InputDataSourceType;
+
+    public String getOutputDataSourceType() {
+        return OutputDataSourceType;
+    }
+
+    public String getOutputDataSourceParams() {
+        return OutputDataSourceParams;
+    }
+
+    public String getInputDataSourceType() {
+        return InputDataSourceType;
+    }
+
+    public String getInputDataSourceParams() {
+        return InputDataSourceParams;
+    }
+
+    String InputDataSourceParams;
 
 
     ExperimentType experimentType = ExperimentType.PubMed;
     Net2BoWType PPRenabled = Net2BoWType.OneWay;
 
     SimilarityType similarityType = SimilarityType.cos; //Cosine 1 jensenShannonDivergence 2 symmetric KLP
-
-    public String getDataSourceType() {
-        return DataSourceType;
-    }
-
-    public String getDataSourceParams() {
-        return DataSourceParams;
-    }
 
 
     public Config(String configPath) {
@@ -174,8 +190,10 @@ public class Config extends Properties {
             pruneLblCntPerc = Double.parseDouble(prop.getProperty("PruneLblCntPerc", "0.002"));
             pruneMaxPerc = Double.parseDouble(prop.getProperty("PruneMaxPerc", "10"));
 
-            DataSourceType = prop.getProperty("DataSourceType");
-            DataSourceParams = prop.getProperty("DataSourceParams");
+            InputDataSourceType = prop.getProperty("InputDataSourceType");
+            InputDataSourceParams = prop.getProperty("InputDataSourceParams");
+            OutputDataSourceType = prop.getProperty("OutputDataSourceType");
+            OutputDataSourceParams = prop.getProperty("OutputDataSourceParams");
             initModelFile = prop.getProperty("initModelFile", "");
             tagger = prop.getProperty("tagger", "openNLP");
 
@@ -259,10 +277,15 @@ public class Config extends Properties {
         return experimentType.toString() + "_" + numTopics + "T_"
                 + numIterations + "IT_" + numChars + "CHRs_" + numModalities + "M_" + ((limitDocs > 0) ? ("Lmt_" + limitDocs) : "") + PPRenabled.name();
     }
-    public String makeExperimentDetails(){
-        return String.format("Multi View Topic Modeling Analysis \n pruneMaxPerc:%.1f  pruneCntPerc:%.4f" +
+    public void makeExperimentDetails(){
+        experimentDetails = String.format("Multi View Topic Modeling Analysis \n pruneMaxPerc:%.1f  pruneCntPerc:%.4f" +
                                 " pruneLblCntPerc:%.4f burnIn:%d numOfThreads:%d similarityType:%s",
                 this.pruneMaxPerc, pruneCntPerc, pruneLblCntPerc, burnIn, numOfThreads, similarityType.toString());
+    }
+    // returns an indentifier pertaining to the input
+    public String getInputId(){
+        return experimentType.toString() + "_" + numChars + "CHRs_" + numModalities + "M_" + ((limitDocs > 0) ? ("Lmt_" + limitDocs) : "");
+
     }
 
     public static void main(String[] args) {

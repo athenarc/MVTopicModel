@@ -498,7 +498,7 @@ public class SQLTMDataSource extends TMDataSource {
         boolean D4I = true;
         Config.Net2BoWType PPRenabled = config.getPPRenabled();
         String experimentId = config.getExperimentId();
-        String SQLConnection = config.getDataSourceParams();
+        String SQLConnection = config.getInputDataSourceParams();
         Config.ExperimentType experimentType = config.getExperimentType();
         int limitDocs = config.getLimitDocs();
         int numChars = config.getNumChars();
