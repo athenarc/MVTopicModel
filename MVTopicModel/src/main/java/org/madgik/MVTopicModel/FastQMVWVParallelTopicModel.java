@@ -162,7 +162,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
     public double[][] expDotProductValues;  //<topic,token>
     public double[] sumExpValues; // Partition function values per topic 
 
-    public String SQLConnectionString;
+    // public String SQLConnectionString;
 
     // The number of times each type appears in the corpus
     int[][] typeTotals;
@@ -180,10 +180,10 @@ public class FastQMVWVParallelTopicModel implements Serializable {
     }
 
     public FastQMVWVParallelTopicModel(int numberOfTopics, byte numModalities, double alpha, double beta,
-                                       boolean useCycleProposals, String SQLConnectionString, boolean useTypeVectors,
+                                       boolean useCycleProposals, boolean useTypeVectors,
                                        double vectorsLambda, boolean trainTypeVectors) {
 
-        this.SQLConnectionString = SQLConnectionString;
+//        this.SQLConnectionString = SQLConnectionString;
         this.useTypeVectors = useTypeVectors;
         this.vectorsLambda = vectorsLambda;
         this.trainTypeVectors = trainTypeVectors;
@@ -3303,22 +3303,22 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
         try {
 
-            InstanceList[] training = new InstanceList[1];
-            training[0] = InstanceList.load(new File(args[0]));
-
-            int numTopics = args.length > 1 ? Integer.parseInt(args[1]) : 200;
-
-            byte mod = 1;
-            FastQMVWVParallelTopicModel lda = new FastQMVWVParallelTopicModel(numTopics, mod, 0.1, 0.01, true, "", true, 0.6, true);
-            lda.printLogLikelihood = true;
-            lda.setTopicDisplay(50, 7);
-            lda.addInstances(training, "", 1, "");
-
-            lda.setNumThreads(Integer.parseInt(args[2]));
-            lda.estimate();
-            logger.info("printing state");
-            lda.printState(new File("state.gz"));
-            logger.info("finished printing");
+//            InstanceList[] training = new InstanceList[1];
+//            training[0] = InstanceList.load(new File(args[0]));
+//
+//            int numTopics = args.length > 1 ? Integer.parseInt(args[1]) : 200;
+//
+//            byte mod = 1;
+//            FastQMVWVParallelTopicModel lda = new FastQMVWVParallelTopicModel(numTopics, mod, 0.1, 0.01, true, "", true, 0.6, true);
+//            lda.printLogLikelihood = true;
+//            lda.setTopicDisplay(50, 7);
+//            lda.addInstances(training, "", 1, "");
+//
+//            lda.setNumThreads(Integer.parseInt(args[2]));
+//            lda.estimate();
+//            logger.info("printing state");
+//            lda.printState(new File("state.gz"));
+//            logger.info("finished printing");
 
         } catch (Exception e) {
             e.printStackTrace();

@@ -9,21 +9,21 @@ import org.madgik.config.Config;
  * Data source factory object.
  */
 public class TMDataSourceFactory {
-    public static TMDataSource instantiate(Config conf){
+    public static TMDataSource instantiate(String type, String params){
         Logger logger = Logger.getLogger(SciTopicFlow.LOGGER);
         try {
-            if (conf.getDataSourceType().equals(SQLTMDataSource.name)) {
-                return new SQLTMDataSource(conf.getDataSourceParams());
+            if (type.equals(SQLTMDataSource.name)) {
+                return new SQLTMDataSource(params);
             }
-            else if (conf.getDataSourceType().equals(SerializedFileTMDataSource.name)) {
-                    return new SerializedFileTMDataSource(conf.getDataSourceParams());
+            else if (type.equals(SerializedFileTMDataSource.name)) {
+                    return new SerializedFileTMDataSource(params);
             } else {
-                logger.error("Undefined data source type " + conf.getDataSourceType());
+                logger.error("Undefined data source type " + type);
                 return null;
             }
         }
         catch (NullPointerException ex){
-            logger.error("Error getting source type information: " + conf.getDataSourceType());
+            logger.error("Error getting source type information: " + type);
             return null;
         }
     }

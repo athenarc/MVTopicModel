@@ -78,17 +78,12 @@ public class SciTopicFlow {
 
         Config config = new Config("config.properties");
         String experimentString = config.makeExperimentString();
-        String experimentDetails = config.makeExperimentDetails();
+        config.makeExperimentDetails();
+
+        if (runtimeProp != null) config.setExperimentId(runtimeProp.get("ExperimentId"));
+        if (StringUtils.isBlank(config.getExperimentId())) config.setExperimentId(experimentString);
         String experimentId = config.getExperimentId();
 
-        if (runtimeProp != null) {
-            experimentId = runtimeProp.get("ExperimentId");
-            config.setExperimentId(experimentId);
-        }
-
-        if (StringUtils.isBlank(experimentId)) {
-            experimentId = experimentString;
-        }
         logger.info(String.format("Experiment ID: %s", experimentId));
 
         if (config.isFindKeyPhrases())
@@ -102,7 +97,6 @@ public class SciTopicFlow {
     }
     public void runTopicModelling(Config config){
         String dictDir = config.getDictDir();
-        String experimentDetails = config.makeExperimentDetails();
         logger.info(" TopicModelling has started");
         String batchId = "-1";
 
@@ -123,11 +117,11 @@ public class SciTopicFlow {
 
         //double gammaRoot = 4;
         FastQMVWVParallelTopicModel model = new FastQMVWVParallelTopicModel(config.getNumTopics(),
-                config.getNumModalities(), alpha, beta, useCycleProposals, config.getDataSourceParams(),
+                config.getNumModalities(), alpha, beta, useCycleProposals,
                 false, 0.0, false);
 
 
-        TMDataSource output = TMDataSourceFactory.instantiate(config);
+        TMDataSource output = TMDataSourceFactory.instantiate(config.getOutputDataSourceType(), config.getOutputDataSourceParams());
         output.prepareOutput(config.getExperimentId());
         //model.CreateTables(config.getDataSourceParams(), config.getExperimentId());
 
@@ -151,7 +145,8 @@ public class SciTopicFlow {
         }
         logger.info("Model estimated");
 
-        output.saveResults(model.getTopicData(), model.getPhraseData(), model.getTopicDetails(), batchId, config.getExperimentId(), experimentDetails, model.getExperimentMetadata());
+        output.saveResults(model.getTopicData(), model.getPhraseData(), model.getTopicDetails(), batchId,
+                config.getExperimentId(), config.getExperimentDetails(), model.getExperimentMetadata());
         // model.saveResults(config.getDataSourceParams(), experimentId, experimentDetails);
         logger.info("Model saved");
 
@@ -166,7 +161,7 @@ public class SciTopicFlow {
             FastQMVWVTopicModelDiagnostics diagnostics = new FastQMVWVTopicModelDiagnostics(model, config.getNumTopWords());
             output.saveDiagnostics(config.getNumModalities(), batchId, config.getExperimentId(), model.getPerplexities(),
                     config.getNumTopics(), diagnostics.getDiagnostics());
-            diagnostics.saveToDB(config.getDataSourceParams(), config.getExperimentId(), 0, batchId);
+            // diagnostics.saveToDB(config.getOutputDataSourceParams(), config.getExperimentId(), 0, batchId);
             logger.info("full diagnostics calculation finished");
 
         } catch (Exception e) {
@@ -183,7 +178,7 @@ public class SciTopicFlow {
 
     private void FindKeyPhrasesPerTopic(Config config) {
         // get topics
-        TMDataSource ds = TMDataSourceFactory.instantiate(config);
+        TMDataSource ds = TMDataSourceFactory.instantiate(config.getInputDataSourceType(), config.getInputDataSourceParams());
         if( ds == null){
             System.exit(1) ;
         }
@@ -368,7 +363,6 @@ public class SciTopicFlow {
     public InstanceList[] GenerateAlphabets(Config config) {
 
 
-        String SQLConnectionString = config.getDataSourceParams();
         Config.ExperimentType experimentType = config.getExperimentType();
         String dictDir = config.getDictDir();
         byte numModalities = config.getNumModalities();
@@ -422,9 +416,9 @@ public class SciTopicFlow {
         //createCitationGraphFile("C:\\projects\\Datasets\\DBLPManage\\acm_output_NET.csv", "jdbc:sqlite:C:/projects/Datasets/DBLPManage/acm_output.db");
 
         // get inputs
-        TMDataSource ds = TMDataSourceFactory.instantiate(config);
+        TMDataSource ds = TMDataSourceFactory.instantiate(config.getInputDataSourceType(), config.getInputDataSourceParams());
         ArrayList<ArrayList<Instance>> instanceBuffer = ds.getInputs(config);
-        logger.info("Read " + instanceBuffer.get(0).size() + " instances modality: " + instanceBuffer.get(0).get(0).getSource().toString());
+        // logger.info("Read " + instanceBuffer.get(0).size() + " instances modality: " + instanceBuffer.get(0).get(0).getSource().toString());
 
         // apply source preprocessing
         TextPreprocessor preproc = new TextPreprocessor(config);
