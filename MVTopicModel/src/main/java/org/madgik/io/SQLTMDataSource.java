@@ -1,19 +1,21 @@
 package org.madgik.io;
 
+import cc.mallet.types.IDSorter;
 import cc.mallet.types.Instance;
+import cc.mallet.types.LabelSequence;
 import edu.stanford.nlp.util.Quadruple;
 import edu.stanford.nlp.util.Triple;
 import org.madgik.MVTopicModel.FastQMVWVTopicModelDiagnostics;
 import org.madgik.config.Config;
+import org.madgik.model.DocumentTopicAssignment;
+import org.madgik.model.Modality;
+import org.madgik.model.TopicData;
 import org.madgik.utils.Utils;
 
 import java.io.*;
 import java.sql.*;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Class for SQL-based data sources
@@ -199,9 +201,7 @@ public class SQLTMDataSource extends TMDataSource {
     }
 
     @Override
-    public void saveResults(ArrayList<Quadruple<Integer, Byte, String, Double>> topicData,
-            ArrayList<Triple<Integer, String, Integer>> phraseData,
-            ArrayList<Quadruple<Integer, Byte, Double, Integer>> topicDetails, String batchId, String experimentId,
+    public void saveResults(List<TopicData> topicData, List<DocumentTopicAssignment> docTopics, String batchId, String experimentId,
                             String experimentDescription, String experimentMetadata){
 
 
@@ -213,29 +213,41 @@ public class SQLTMDataSource extends TMDataSource {
             getConnection().setAutoCommit(false);
             bulkInsert = getConnection().prepareStatement(sql);
 
-            for(int i=0;i<topicData.size();++i){
-                bulkInsert.setInt(1, topicData.get(i).first);
-                bulkInsert.setInt(2, topicData.get(i).second);
-                bulkInsert.setString(3, topicData.get(i).third);
-                bulkInsert.setDouble(4, topicData.get(i).fourth);
-                bulkInsert.setString(5, batchId);
-                bulkInsert.setString(6, experimentId);
-                bulkInsert.executeUpdate();
+            for(TopicData topic : topicData){
+                for (Modality mod : topic.getModalities()) {
+                    for (String word : mod.getWordWeights().keySet()) {
+
+                        bulkInsert.setInt(1, topic.getTopicId());
+                        bulkInsert.setInt(2, mod.getId());
+                        bulkInsert.setString(3, word);
+                        bulkInsert.setDouble(4, mod.getWordWeights().get(word));
+                        bulkInsert.setString(5, batchId);
+                        bulkInsert.setString(6, experimentId);
+                        bulkInsert.executeUpdate();
+                    }
+                }
             }
 
 
             // Save Topic Analysis
-            for (int i=0;i<phraseData.size();++i) {
-                    bulkInsert.setInt(1, phraseData.get(i).first);
+            for(TopicData topic : topicData) {
+                Modality textModality = topic.getModality(Modality.types.TEXT);
+                if (textModality == null) {
+                    logger.error("No text modality found to save prhase data!");
+                    return;
+                }
+                for (String phrase : textModality.getPhraseWeights().keySet()) {
+                    bulkInsert.setInt(1, topic.getTopicId());
                     bulkInsert.setInt(2, -1);
-                    bulkInsert.setString(3, phraseData.get(i).second);
-                    bulkInsert.setDouble(4, phraseData.get(i).third);
+                    bulkInsert.setString(3, phrase);
+                    bulkInsert.setDouble(4, textModality.getPhraseWeights().get(phrase));
                     bulkInsert.setString(5, batchId);
                     bulkInsert.setString(6, experimentId);
                     //bulkInsert.setDouble(6, 1);
                     bulkInsert.executeUpdate();
                 }
                 connection.commit();
+            }
 
         } catch (SQLException e) {
             logger.error("Exception in save Topics: " + e.getMessage());
@@ -343,16 +355,19 @@ public class SQLTMDataSource extends TMDataSource {
                 bulkTopicDetailInsert = connection.prepareStatement(topicDetailInsertsql);
                 connection.setAutoCommit(false);
 
-                for(int i=0;i<topicDetails.size();++i) {
-                        bulkTopicDetailInsert.setInt(1, topicDetails.get(i).first);
-                        bulkTopicDetailInsert.setInt(2, topicDetails.get(i).second);
-                        bulkTopicDetailInsert.setDouble(3, topicDetails.get(i).third);
-                        bulkTopicDetailInsert.setInt(4, topicDetails.get(i).fourth);
+
+                for(TopicData topic : topicData) {
+                    for (Modality mod : topic.getModalities()) {
+                        bulkTopicDetailInsert.setInt(1, topic.getTopicId());
+                        bulkTopicDetailInsert.setInt(2, mod.getId());
+                        bulkTopicDetailInsert.setDouble(3, mod.getWeight());
+                        bulkTopicDetailInsert.setInt(4, mod.getNumTokens());
                         bulkTopicDetailInsert.setString(5, batchId);
                         bulkTopicDetailInsert.setString(6, experimentId);
 
                         bulkTopicDetailInsert.executeUpdate();
-                 }
+                    }
+                }
                 connection.commit();
             } catch (SQLException e) {
                 logger.error("Exception in save Topics: " + e.getMessage());
@@ -378,11 +393,39 @@ public class SQLTMDataSource extends TMDataSource {
             }
             logger.info("Done saving results.");
 
+
+        // save document assignments
+        String docSql = "insert into doc_topic values(?,?,?,?,?);";
+        try {
+            bulkInsert = connection.prepareStatement(docSql);
+            connection.setAutoCommit(false);
+            for(DocumentTopicAssignment dta : docTopics) {
+                for (int topic : dta.getTopicWeights().keySet()) {
+
+                    bulkInsert.setString(1, dta.getId());
+                    bulkInsert.setInt(2, topic);
+                    bulkInsert.setDouble(3, dta.getTopicWeights().get(topic));
+                    bulkInsert.setString(4, experimentId);
+                    bulkInsert.setBoolean(5, true);
+                    bulkInsert.executeUpdate();
+                }
+            }
+        } catch (SQLException ex) {
+            logger.error(ex.getMessage());
+        }
+        finally {
+            try {
+                connection.setAutoCommit(true);
+                bulkInsert.close();
+            } catch (SQLException ex) {
+                logger.error(ex.getMessage());
+            }
+        }
     }
 
     @Override
     public void saveDiagnostics(int numModalities, String batchId, String experimentId, double[][] perplexities,
-                                int numTopics, ArrayList<FastQMVWVTopicModelDiagnostics.TopicScores> diagnostics) {
+                                int numTopics, List<FastQMVWVTopicModelDiagnostics.TopicScores> diagnostics) {
         Connection connection = null;
         double perplexity = 0;
         String current_score = "";

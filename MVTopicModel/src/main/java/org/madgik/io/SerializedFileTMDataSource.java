@@ -7,6 +7,8 @@ import edu.stanford.nlp.util.Triple;
 import org.apache.commons.lang.ArrayUtils;
 import org.madgik.MVTopicModel.FastQMVWVTopicModelDiagnostics;
 import org.madgik.config.Config;
+import org.madgik.model.DocumentTopicAssignment;
+import org.madgik.model.TopicData;
 import org.madgik.utils.Utils;
 
 import java.io.*;
@@ -21,11 +23,16 @@ public class SerializedFileTMDataSource extends FileTMDataSource {
         super(properties);
     }
 
+    @Override
+    public String getPath(String path) {
+        return path + ".ser";
+    }
+
     /**
      * Read java serialized file
      * @param o
      */
-    void writeObject(Object o, String outpath){
+    public void writeObject(Object o, String outpath){
         logger.info("Serializing to " + outpath);
         // serialize for testing
         ObjectOutputStream out = null;
@@ -38,7 +45,7 @@ public class SerializedFileTMDataSource extends FileTMDataSource {
         }
     }
 
-    Object readObject(String inpath){
+    public Object readObject(String inpath){
         logger.info("Reading serialized object from path " + inpath);
         // serialize for testing
         ObjectInputStream in = null;
@@ -57,7 +64,7 @@ public class SerializedFileTMDataSource extends FileTMDataSource {
     public ArrayList<ArrayList<Instance>> getInputs(Config config){
         String inputId = config.getInputId();
         String inputPath;
-        inputPath = "inputs." +inputId + ".ser";
+        inputPath = getPath("inputs." +inputId);
         return (ArrayList<ArrayList<Instance>>) readObject(inputPath);
 
     }
@@ -82,32 +89,19 @@ public class SerializedFileTMDataSource extends FileTMDataSource {
 
     }
 
+
+
     @Override
-    public void saveResults(ArrayList<Quadruple<Integer, Byte, String, Double>> topicData,
-                            ArrayList<Triple<Integer, String, Integer>> phraseData,
-                            ArrayList<Quadruple<Integer, Byte, Double, Integer>> topicDetails,
-                            String batchId, String experimentId, String experimentDescription, String experimentMetadata) {
+    public void saveResults(List<TopicData> topicData, List<DocumentTopicAssignment> docTopics, String batchId, String experimentId,
+                            String experimentDescription, String experimentMetadata){
 
-        // bundle up in a pair.
-        // First: the resulting data (topicData, phraseData, topicDetails)
-        // Second: run metadata (batchId, experimentId, experimentDescr, experimentMetadata
-        Pair<Triple<
-            ArrayList<Quadruple<Integer, Byte, String, Double>>,
-            ArrayList<Triple<Integer, String, Integer>>,
-            ArrayList<Quadruple<Integer, Byte, Double, Integer>>
-                >,
-             Quadruple<String, String, String, String>
-              > results = new Pair<>( new Triple<>(topicData, phraseData, topicDetails),
-                                    new Quadruple<>(batchId, experimentId, experimentDescription, experimentMetadata));
-        // serialize
-        writeObject(results, "results_" + experimentId + ".ser");
-
-
+        writeObject(topicData, getPath("topic_results_" + experimentId));
+        writeObject(docTopics, getPath("document_assignments_" + experimentId));
     }
 
     @Override
     public void saveDiagnostics(int numModalities, String batchId, String experimentId, double[][] perplexities,
-                                int numTopics, ArrayList<FastQMVWVTopicModelDiagnostics.TopicScores> topicScores) {
+                                int numTopics, List<FastQMVWVTopicModelDiagnostics.TopicScores> topicScores) {
 
         // ensure serializables
         Double [][] perplexityObjArray = Utils.toDouble2DObject(perplexities);

@@ -7,6 +7,8 @@ import org.apache.log4j.Logger;
 import org.madgik.MVTopicModel.FastQMVWVTopicModelDiagnostics;
 import org.madgik.MVTopicModel.SciTopicFlow;
 import org.madgik.config.Config;
+import org.madgik.model.DocumentTopicAssignment;
+import org.madgik.model.TopicData;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -36,13 +38,10 @@ public abstract class TMDataSource {
     public abstract void prepareOutput(String experimentId);
 
 
-    public abstract void saveResults(ArrayList<Quadruple<Integer, Byte, String, Double>> topicData,
-                            ArrayList<Triple<Integer, String, Integer>> phraseData,
-                            ArrayList<Quadruple<Integer, Byte, Double, Integer>> topicDetails, String batchId, String experimentId,
-                            String experimentDescription, String experimentMetadata);
+    public abstract void saveResults(List<TopicData> topicData, List<DocumentTopicAssignment> docTopics, String batchId, String experimentId, String experimentDescription, String experimentMetadata);
 
     public abstract void saveDiagnostics(int numModalities, String batchId, String experimentId, double[][] perplexities,
-                                         int numTopics, ArrayList<FastQMVWVTopicModelDiagnostics.TopicScores> diagnostics);
+                                         int numTopics, List<FastQMVWVTopicModelDiagnostics.TopicScores> diagnostics);
 
     // post-analysis
     public abstract void prepareTopicDistroTrendsOutput(String experimentId);

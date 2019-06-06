@@ -16,7 +16,7 @@ import java.util.List;
 import static org.madgik.MVTopicModel.SciTopicFlow.logger;
 import static org.madgik.utils.Utils.cosineSimilarity;
 
-public class TrendCalculator {
+public class TrendCalculator extends AbstractTrendCalculator {
     public void setConfig(Config config) {
         this.config = config;
     }
@@ -49,6 +49,20 @@ public class TrendCalculator {
              * weight: > 0.1
              */
 
+
+            /**
+             * The query:
+             *
+             * PMC=# SELECT  sum(weight) AS SumWeight, ExperimentId
+             * FROM doc_topic
+             * Where doc_topic.weight>0.1
+             * and doc_topic.ExperimentId='PubMed_500T_550IT_7000CHRs_4M_OneWay' group by ExperimentId;
+             *
+             * sums up the topic weights of the documents in the current experiment.
+             *
+             *
+             */
+
             String SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
                     + "select '',  doc_topic.TopicId, '', 'Corpus', round(sum(weight)/SumTopicWeightView.SumWeight, 5) as NormWeight, doc_topic.ExperimentId\n"
                     + "from doc_topic\n"
@@ -65,6 +79,10 @@ public class TrendCalculator {
 
             if (experimentType == Config.ExperimentType.PubMed) {
 
+                /*
+                As above, but normalize by the sums per batch weight
+
+                 */
                 logger.info("Trend Topic distribution for the whole coprus");
 
                 SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
@@ -82,6 +100,13 @@ public class TrendCalculator {
                         + "Order by Document.BatchId,   NormWeight Desc";
 
                 statement.executeUpdate(SQLstr);
+
+
+                /*
+                As above, but normalize by the weight sums wrt the project
+
+                 */
+
 
                 logger.info("Project Topic distribution");
 
@@ -106,6 +131,7 @@ public class TrendCalculator {
 
                 statement.executeUpdate(SQLstr);
 
+                // normalize by funder sum
                 logger.info("Funder Topic distribution");
                 SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
                         + " SELECT '', doc_topic.TopicId, doc_funder_view.funder,'Funder',\n"
@@ -130,6 +156,7 @@ public class TrendCalculator {
 
                 statement.executeUpdate(SQLstr);
 
+                // .. this is the save as above, but the batchId is set. Also joined on document
                 logger.info("Funder Trend Topic distribution");
 
                 SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
@@ -609,16 +636,48 @@ public class TrendCalculator {
     }
 
     public static void main(String[] args) {
-        String SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                    + "select '',  doc_topic.TopicId, '', 'Corpus', round(sum(weight)/SumTopicWeightView.SumWeight, 5) as NormWeight, doc_topic.ExperimentId\n"
-                    + "from doc_topic\n"
-                    + "INNER JOIN (SELECT  sum(weight) AS SumWeight, ExperimentId\n"
-                    + "FROM doc_topic\n"
-                    + "Where doc_topic.weight>0.1 \n"
-                    + " and doc_topic.ExperimentId='" + "PubMed_500T_550IT_7000CHRs_4M_OneWay" + "'  \n"
-                    + "GROUP BY  ExperimentId) SumTopicWeightView on SumTopicWeightView.ExperimentId= doc_topic.ExperimentId\n"
-                    + "group By doc_topic.TopicId, doc_topic.ExperimentId, SumTopicWeightView.SumWeight\n"
-                    + "Order by  NormWeight Desc";
-        System.out.println(SQLstr);
+
+        System.out.println("INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
+                        + " SELECT '', doc_topic.TopicId, doc_funder_view.funder,'Funder',\n"
+                        + "                               round(sum(doc_topic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
+                        + "                                 doc_topic.ExperimentId\n"
+                        + "                          FROM doc_topic\n"
+                        + "                          INNER JOIN  doc_funder_view ON doc_topic.docid = doc_funder_view.docid AND doc_topic.weight > 0.1\n"
+                        + "                          and  doc_topic.ExperimentId='expid' \n"
+                        + "                        \n"
+                        + "                               INNER JOIN (SELECT doc_funder_view.funder, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
+                        + "                               FROM doc_topic\n"
+                        + "                               INNER JOIN   doc_funder_view ON doc_topic.docid = doc_funder_view.docid AND  doc_topic.weight > 0.1\n"
+                        + "                               \n"
+                        + "                               GROUP BY  ExperimentId,doc_funder_view.funder)\n"
+                        + "                               SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.funder = doc_funder_view.funder AND \n"
+                        + "                                                               SumTopicWeightPerProjectView.ExperimentId = doc_topic.ExperimentId                                            \n"
+                        + "                         GROUP BY doc_funder_view.funder,\n"
+                        + "                                  SumTopicWeightPerProjectView.ProjectSumWeight,\n"
+                        + "                                  doc_topic.TopicId,\n"
+                        + "                                  doc_topic.ExperimentId\n"
+                        + "                                  order by  doc_topic.ExperimentId, doc_funder_view.funder, NormWeight Desc,doc_topic.ExperimentId");
+
+
+
+
+        System.out.println(
+                         "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
+                        + "SELECT Document.batchId, doc_topic.TopicId, doc_funder_view.funder,'FunderTrend',\n"
+                        + "round(sum(doc_topic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight, doc_topic.ExperimentId\n"
+                        + "FROM doc_topic\n"
+                        + "INNER JOIN Document on doc_topic.docid= document.id and doc_topic.weight>0.1\n"
+                        + " and  doc_topic.ExperimentId='expid' \n"
+                        + "INNER JOIN  doc_funder_view ON doc_topic.docid = doc_funder_view.docid                           \n"
+                        + "INNER JOIN (SELECT doc_funder_view.funder, document.batchId, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
+                        + "FROM doc_topic\n"
+                        + "Inner Join Document on doc_topic.docid= document.id and doc_topic.weight>0.1           \n"
+                        + "INNER JOIN   doc_funder_view ON doc_topic.docid = doc_funder_view.docid                                \n"
+                        + "GROUP BY  doc_funder_view.funder,Document.batchId,ExperimentId) SumTopicWeightPerProjectView \n"
+                        + "ON SumTopicWeightPerProjectView.funder = doc_funder_view.funder AND SumTopicWeightPerProjectView.ExperimentId = doc_topic.ExperimentId  AND SumTopicWeightPerProjectView.batchId = Document.batchId\n"
+                        + "GROUP BY doc_funder_view.funder,Document.batchId, SumTopicWeightPerProjectView.ProjectSumWeight,doc_topic.TopicId,doc_topic.ExperimentId\n"
+                        + "order by  doc_topic.ExperimentId, doc_funder_view.funder, NormWeight Desc,doc_topic.ExperimentId"
+        );
+
     }
 }
