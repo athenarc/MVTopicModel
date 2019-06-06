@@ -3,6 +3,9 @@ package org.madgik.MVTopicModel;
 import edu.stanford.nlp.util.Quadruple;
 import edu.stanford.nlp.util.Triple;
 import org.apache.commons.lang3.tuple.Pair;
+import org.madgik.model.DocumentTopicAssignment;
+import org.madgik.model.Modality;
+import org.madgik.model.TopicData;
 import org.madgik.utils.FastQDelta;
 import org.madgik.utils.MixTopicModelTopicAssignment;
 import org.madgik.utils.FTree;
@@ -363,6 +366,11 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
         }
 
+    }
+
+    public List<FastQMVWVTopicModelDiagnostics.TopicScores>  doInference(int numTopWords){
+        FastQMVWVTopicModelDiagnostics diagnostics = new FastQMVWVTopicModelDiagnostics(this, numTopWords);
+        return diagnostics.getDiagnostics();
     }
 
     private double[] CalcTopicVectorBasedOnWords(int maxNumWords, int topic) {
@@ -1456,22 +1464,12 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
     }
 
-    ArrayList<Quadruple<Integer, Byte, String, Double>> topicData;
-    ArrayList<Triple<Integer, String, Integer>> phraseData;
+    // ArrayList<Quadruple<Integer, Byte, String, Double>> topicData;
+    ArrayList<TopicData> topicData;
 
-    public ArrayList<Quadruple<Integer, Byte, String, Double>> getTopicData() {
+    public ArrayList<TopicData> getTopicData() {
         return topicData;
     }
-
-    public ArrayList<Triple<Integer, String, Integer>> getPhraseData() {
-        return phraseData;
-    }
-
-    public ArrayList<Quadruple<Integer, Byte, Double, Integer>> getTopicDetails() {
-        return topicDetails;
-    }
-
-    ArrayList<Quadruple<Integer, Byte, Double, Integer>> topicDetails;
 
     public String getExperimentMetadata(){
         return this.expMetadata.toString();
@@ -1480,53 +1478,68 @@ public class FastQMVWVParallelTopicModel implements Serializable {
    public void gatherTopics(){
 
 
-       topicData = new ArrayList<>();
-       topicDetails = new ArrayList<>();
-       phraseData = new ArrayList<>();
+       printDocumentTopics(null, 0.0d, 1, "", "");
 
-       // gather per-topic basic information
+       topicData = new ArrayList<>();
+
+       // prepare
        ArrayList<ArrayList<TreeSet<IDSorter>>> topicSortedWords = new ArrayList<>(numModalities);
        for (Byte m = 0; m < numModalities; m++) topicSortedWords.add(getSortedWords(m));
-       for (int topic = 0; topic < numTopics; topic++) {
-           for (Byte m = 0; m < numModalities; m++) {
+       TObjectIntHashMap<String>[] phrases = findTopicPhrases();
 
-               TreeSet<IDSorter> sortedWords = topicSortedWords.get(m).get(topic);
+       // gather per-topic basic information
+       for (int topicId = 0; topicId < numTopics; topicId++) {
+
+           TopicData currentTopic = new TopicData();
+           currentTopic.setTopicId(topicId);
+
+           // iterate over modalities
+           for (Byte m = 0; m < numModalities; m++) {
+               Modality modality = new Modality();
+               modality.setId(m);
+
+               // tokens and weights
+               TreeSet<IDSorter> sortedWords = topicSortedWords.get(m).get(topicId);
                int word = 1;
                Iterator<IDSorter> iterator = sortedWords.iterator();
                //int activeNumWords = Math.min(40, 7 * (int) Math.round(topicsDiscrWeight[m][topic] * topicTypeCount));
                while (iterator.hasNext() && word < 50) {
                    IDSorter info = iterator.next();
-                   topicData.add(new Quadruple<>(topic, m, alphabet[m].lookupObject(info.getID()).toString(), info.getWeight()));
+                   modality.getWordWeights().put(alphabet[m].lookupObject(info.getID()).toString(), info.getWeight());
                    word++;
                }
+
+               // phrases
+               if (Modality.types.values()[m] == Modality.types.TEXT){
+                   Map<String, Double> phraseWeights = new HashMap<>();
+                   Object[] keys = phrases[topicId].keys();
+                   int[] values = phrases[topicId].values();
+                   double counts[] = new double[keys.length];
+                   for (int i = 0; i < counts.length; i++) counts[i] = values[i];
+
+                   // double countssum = MatrixOps.sum(counts);
+                   Alphabet alph = new Alphabet(keys);
+                   RankedFeatureVector rfv = new RankedFeatureVector(alph, counts);
+                   int max = rfv.numLocations() < 20 ? rfv.numLocations() : 20;
+                   for (int ri = 0; ri < max; ri++) {
+                       int fi = rfv.getIndexAtRank(ri);
+                       double count = counts[fi];// / countssum;
+                       String phraseStr = alph.lookupObject(fi).toString();
+                       // phraseData.add(new Triple(topicId, phraseStr, count));
+                       phraseWeights.put(phraseStr, count);
+                   }
+                   modality.setPhraseWeights(phraseWeights);
+
+               }
+
+               // overall topic weights
+               modality.setWeight(alpha[m][topicId]);
+               modality.setNumTokens(tokensPerTopic[m].get(topicId));
+               currentTopic.addModality(modality);
+
            }
-       }
-
-       // find and gather phrase data
-       TObjectIntHashMap<String>[] phrases = findTopicPhrases();
-       for (int ti = 0; ti < numTopics; ti++) {
-
-           // Print phrases
-           Object[] keys = phrases[ti].keys();
-           int[] values = phrases[ti].values();
-           double counts[] = new double[keys.length];
-           for (int i = 0; i < counts.length; i++) counts[i] = values[i];
-
-           // double countssum = MatrixOps.sum(counts);
-           Alphabet alph = new Alphabet(keys);
-           RankedFeatureVector rfv = new RankedFeatureVector(alph, counts);
-           int max = rfv.numLocations() < 20 ? rfv.numLocations() : 20;
-           for (int ri = 0; ri < max; ri++) {
-               int fi = rfv.getIndexAtRank(ri);
-               double count = counts[fi];// / countssum;
-               String phraseStr = alph.lookupObject(fi).toString();
-               phraseData.add(new Triple(ti, phraseStr, count));
-           }
-       }
-       // gather topic details
-       for (int topic = 0; topic < numTopics; topic++) {
-           for (Byte m = 0; m < numModalities; m++)
-               topicDetails.add(new Quadruple<>(topic, m, alpha[m][topic], tokensPerTopic[m].get(topic)));
+           // add topic to the collection
+           topicData.add(currentTopic);
        }
    }
 
@@ -2861,12 +2874,19 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 //        }
     }
 
+    public List<DocumentTopicAssignment> getDocTopics() {
+        return docTopics;
+    }
+
+    List<DocumentTopicAssignment> docTopics;
+
     public void printDocumentTopics(PrintWriter out, double threshold, int max, String SQLConnectionString, String experimentId) {
         if (out != null) {
             out.print("#doc name topic proportion ...\n");
         }
-        int[] docLen = new int[numModalities];
+        docTopics = new ArrayList<>();
 
+        int[] docLen = new int[numModalities];
         int[][] topicCounts = new int[numModalities][numTopics];
 
         IDSorter[] sortedTopics = new IDSorter[numTopics];
@@ -2884,139 +2904,72 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             appendMetadata("Modality<" + m + "> Discr. Weight: " + formatter.format(skewWeight[m])); //LL for eachmodality
         }
 
-        Connection connection = null;
-        Statement statement = null;
-        try {
-            // create a database connection
-            if (!SQLConnectionString.isEmpty()) {
-                connection = DriverManager.getConnection(SQLConnectionString);
-                statement = connection.createStatement();
 
-            }
-            PreparedStatement bulkInsert = null;
-            String sql = "insert into doc_topic values(?,?,?,?,?);";
+        for (int doc = 0; doc < data.size(); doc++) {
+            int cntEnd = numModalities;
+            StringBuilder builder = new StringBuilder();
+            builder.append(doc);
+            builder.append("\t");
 
-            try {
-                connection.setAutoCommit(false);
-                bulkInsert = connection.prepareStatement(sql);
+            String docId = "no-name";
 
-                for (int doc = 0; doc < data.size(); doc++) {
-                    int cntEnd = numModalities;
-                    StringBuilder builder = new StringBuilder();
-                    builder.append(doc);
-                    builder.append("\t");
+            docId = data.get(doc).EntityId.toString();
 
-                    String docId = "no-name";
+            builder.append(docId);
+            builder.append("\t");
 
-                    docId = data.get(doc).EntityId.toString();
+            for (Byte m = 0; m < cntEnd; m++) {
+                if (data.get(doc).Assignments[m] != null) {
+                    Arrays.fill(topicCounts[m], 0);
+                    LabelSequence topicSequence = (LabelSequence) data.get(doc).Assignments[m].topicSequence;
 
-                    builder.append(docId);
-                    builder.append("\t");
+                    int[] currentDocTopics = topicSequence.getFeatures();
 
-                    for (Byte m = 0; m < cntEnd; m++) {
-                        if (data.get(doc).Assignments[m] != null) {
-                            Arrays.fill(topicCounts[m], 0);
-                            LabelSequence topicSequence = (LabelSequence) data.get(doc).Assignments[m].topicSequence;
+                    docLen[m] = data.get(doc).Assignments[m].topicSequence.getLength();// currentDocTopics.length;
 
-                            int[] currentDocTopics = topicSequence.getFeatures();
-
-                            docLen[m] = data.get(doc).Assignments[m].topicSequence.getLength();// currentDocTopics.length;
-
-                            // Count up the tokens
-                            for (int token = 0; token < docLen[m]; token++) {
-                                topicCounts[m][currentDocTopics[token]]++;
-                            }
-                        }
-                    }
-
-                    // And normalize
-                    for (int topic = 0; topic < numTopics; topic++) {
-                        double topicProportion = 0;
-                        double normalizeSum = 0;
-                        for (Byte m = 0; m < cntEnd; m++) {
-                            //I reweight each modality's contribution in the proportion of the document based on its discrimination power (skew index) and its relation to text
-                            topicProportion += (m == 0 ? 1 : skewWeight[m]) * pMean[0][m] * ((double) topicCounts[m][topic] + (double) gamma[m] * alpha[m][topic]) / (docLen[m] + (double) gamma[m] * alphaSum[m]);
-                            normalizeSum += (m == 0 ? 1 : skewWeight[m]) * pMean[0][m];
-                        }
-                        sortedTopics[topic].set(topic, (topicProportion / normalizeSum));
-
-                    }
-
-                    Arrays.sort(sortedTopics);
-
-                    for (int i = 0; i < max; i++) {
-                        if (sortedTopics[i].getWeight() < threshold) {
-                            break;
-                        }
-
-                        builder.append(sortedTopics[i].getID() + "\t"
-                                + sortedTopics[i].getWeight() + "\t");
-                        if (out != null) {
-                            out.println(builder);
-                        }
-
-                        if (!SQLConnectionString.isEmpty()) {
-
-                            bulkInsert.setString(1, docId);
-                            bulkInsert.setInt(2, sortedTopics[i].getID());
-                            bulkInsert.setDouble(3, (double) Math.round(sortedTopics[i].getWeight() * 10000) / 10000);
-                            bulkInsert.setString(4, experimentId);
-                            bulkInsert.setBoolean(5, true);
-                            bulkInsert.executeUpdate();
-
-                        }
-
-                    }
-
-//                    if ((doc / 10) * 10 == doc && !sql.isEmpty()) {
-//                        statement.executeUpdate(sql);
-//                        sql = "";
-//                    }
-                }
-                if (!SQLConnectionString.isEmpty()) {
-                    connection.commit();
-                }
-//                if (!sql.isEmpty()) {
-//                    statement.executeUpdate(sql);
-//                }
-//
-
-            } catch (SQLException e) {
-
-                if (connection != null) {
-                    try {
-                        logger.error(e.getMessage());
-                        System.err.print("Transaction is being rolled back");
-                        connection.rollback();
-                    } catch (SQLException excep) {
-                        logger.error(excep.getMessage());
-                        System.err.print("Error in insert topicAnalysis");
+                    // Count up the tokens
+                    for (int token = 0; token < docLen[m]; token++) {
+                        topicCounts[m][currentDocTopics[token]]++;
                     }
                 }
-            } finally {
-
-                if (bulkInsert != null) {
-                    bulkInsert.close();
-                }
-                connection.setAutoCommit(true);
             }
 
-        } catch (SQLException e) {
-            // if the error message is "out of memory", 
-            // it probably means no database file is found
-            logger.error(e.getMessage());
-            System.err.println(e.getMessage());
-        } finally {
-            try {
-                if (connection != null) {
-                    connection.close();
+            // And normalize
+            for (int topic = 0; topic < numTopics; topic++) {
+                double topicProportion = 0;
+                double normalizeSum = 0;
+                for (Byte m = 0; m < cntEnd; m++) {
+                    //I reweight each modality's contribution in the proportion of the document based on its discrimination power (skew index) and its relation to text
+                    topicProportion += (m == 0 ? 1 : skewWeight[m]) * pMean[0][m] * ((double) topicCounts[m][topic] + (double) gamma[m] * alpha[m][topic]) / (docLen[m] + (double) gamma[m] * alphaSum[m]);
+                    normalizeSum += (m == 0 ? 1 : skewWeight[m]) * pMean[0][m];
                 }
-            } catch (SQLException e) {
-                // connection close failed.
-                logger.error(e.getMessage());
-                System.err.println(e);
+                sortedTopics[topic].set(topic, (topicProportion / normalizeSum));
+
             }
 
+            Arrays.sort(sortedTopics);
+
+            DocumentTopicAssignment document = new DocumentTopicAssignment();
+            document.setId(docId);
+            // docTopics.add();
+            // document.set
+
+            for (int i = 0; i < max; i++) {
+                if (sortedTopics[i].getWeight() < threshold) {
+                    break;
+                }
+
+                builder.append(sortedTopics[i].getID() + "\t"
+                        + sortedTopics[i].getWeight() + "\t");
+                if (out != null) {
+                    out.println(builder);
+                }
+
+                document.getTopicWeights().put(sortedTopics[i].getID(), (double) Math.round(sortedTopics[i].getWeight() * 10000) / 10000);
+
+            }
+
+            docTopics.add(document);
         }
     }
 

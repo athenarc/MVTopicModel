@@ -164,9 +164,11 @@ public class FastQMVWVTopicModelDiagnostics {
             docTopicWordIndices[topic] = new TIntHashSet();
         }
 
+        logger.info("Performing inference.");
         int doc = 0;
-
         for (MixTopicModelTopicAssignment document : model.getData()) {
+            if(doc % 50 == 0 && doc > 0) logger.info("Document # " + doc);
+
 
             if (document.Assignments[0] != null) {
                 FeatureSequence tokens = (FeatureSequence) document.Assignments[0].instance.getData();
@@ -848,9 +850,11 @@ public class FastQMVWVTopicModelDiagnostics {
             topicWordScores[topic][wordPosition] = score;
             wordScoresDefined = true;
         }
+        // for java serialization
         public Quadruple toQuadruple(){
             return new Quadruple<String, Double[], Double[][], Boolean>(name, ArrayUtils.toObject(scores), Utils.toDouble2DObject(topicWordScores), wordScoresDefined);
         }
+
     }
 
     public static void main(String[] args) throws Exception {

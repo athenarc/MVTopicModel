@@ -16,7 +16,10 @@ public class TMDataSourceFactory {
                 return new SQLTMDataSource(params);
             }
             else if (type.equals(SerializedFileTMDataSource.name)) {
-                    return new SerializedFileTMDataSource(params);
+                return new SerializedFileTMDataSource(params);
+            }
+            else if (type.equals(JsonTMDataSource.name)) {
+                    return new JsonTMDataSource(params);
             } else {
                 logger.error("Undefined data source type " + type);
                 return null;

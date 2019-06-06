@@ -89,14 +89,24 @@ public class SciTopicFlow {
         if (config.isFindKeyPhrases())
             FindKeyPhrasesPerTopic(config);
 
-        runTopicModelling(config);
+
+
+
+        // output.saveResults(model.getTopicData(), model.getPhraseData(), model.getTopicDetails(), batchId,
+                // config.getExperimentId(), config.getExperimentDetails(), model.getExperimentMetadata());
+        // model.saveResults(config.getDataSourceParams(), experimentId, experimentDetails);
+        // logger.info("Model Id: \n" + config.getExperimentId());
+        // logger.info("Model Metadata: \n" + model.getExpMetadata());
+
+
+        FastQMVWVParallelTopicModel model = runTopicModelling(config);
+        if (model == null) return;
         TrendCalculator trendCalc = new TrendCalculator();
         trendCalc.setConfig(config);
         trendCalc.doPostAnalysis(experimentId);
 
     }
-    public void runTopicModelling(Config config){
-        String dictDir = config.getDictDir();
+    public FastQMVWVParallelTopicModel runTopicModelling(Config config){
         logger.info(" TopicModelling has started");
         String batchId = "-1";
 
@@ -120,8 +130,11 @@ public class SciTopicFlow {
                 config.getNumModalities(), alpha, beta, useCycleProposals,
                 false, 0.0, false);
 
-
         TMDataSource output = TMDataSourceFactory.instantiate(config.getOutputDataSourceType(), config.getOutputDataSourceParams());
+        if (output == null){
+            logger.error("Topic modelling run failed.");
+            return null;
+        }
         output.prepareOutput(config.getExperimentId());
         //model.CreateTables(config.getDataSourceParams(), config.getExperimentId());
 
@@ -145,8 +158,8 @@ public class SciTopicFlow {
         }
         logger.info("Model estimated");
 
-        output.saveResults(model.getTopicData(), model.getPhraseData(), model.getTopicDetails(), batchId,
-                config.getExperimentId(), config.getExperimentDetails(), model.getExperimentMetadata());
+        model.gatherTopics();
+        output.saveResults(model.getTopicData(), model.getDocTopics(), batchId, config.getExperimentId(), config.getExperimentDetails(), model.getExperimentMetadata());
         // model.saveResults(config.getDataSourceParams(), experimentId, experimentDetails);
         logger.info("Model saved");
 
@@ -154,25 +167,20 @@ public class SciTopicFlow {
         logger.info("Model Metadata: \n" + model.getExpMetadata());
 
         //if (modelEvaluationFile != null) {
+        // do inference
         try {
-
-            double perplexity = 0;
-
-            FastQMVWVTopicModelDiagnostics diagnostics = new FastQMVWVTopicModelDiagnostics(model, config.getNumTopWords());
+            List<FastQMVWVTopicModelDiagnostics.TopicScores> inferenceResults = model.doInference(config.getNumTopWords());
+            double[][] perplexities = model.getPerplexities();
+            //FastQMVWVTopicModelDiagnostics diagnostics = new FastQMVWVTopicModelDiagnostics(model, config.getNumTopWords());
             output.saveDiagnostics(config.getNumModalities(), batchId, config.getExperimentId(), model.getPerplexities(),
-                    config.getNumTopics(), diagnostics.getDiagnostics());
+                    config.getNumTopics(), inferenceResults);
             // diagnostics.saveToDB(config.getOutputDataSourceParams(), config.getExperimentId(), 0, batchId);
             logger.info("full diagnostics calculation finished");
 
         } catch (Exception e) {
             logger.error(e.getMessage());
         }
-
-
-    }
-
-    public void getPropValues() throws IOException {
-
+        return model;
 
     }
 
@@ -187,126 +195,6 @@ public class SciTopicFlow {
         kwe.FindKeyPhrasesPerTopic(topicIdsTitles, config);
     }
 
-
-    private void TfIdfWeighting(InstanceList instances, String SQLConnection, String experimentId, int itemType) {
-
-        int N = instances.size();
-
-        Alphabet alphabet = instances.getDataAlphabet();
-        Object[] tokens = alphabet.toArray();
-        System.out.println("# Number of dimensions: " + tokens.length);
-        // determine document frequency for each term
-        int[] df = new int[tokens.length];
-        for (Instance instance : instances) {
-            FeatureVector fv = new FeatureVector((FeatureSequence) instance.getData());
-            int[] indices = fv.getIndices();
-            for (int index : indices) {
-                df[index]++;
-            }
-        }
-
-        // determine document length for each document
-        int[] lend = new int[N];
-        double lenavg = 0;
-        for (int i = 0; i < N; i++) {
-            Instance instance = instances.get(i);
-            FeatureVector fv = new FeatureVector((FeatureSequence) instance.getData());
-            int[] indices = fv.getIndices();
-            double length = 0.0;
-            for (int index : indices) {
-                length += fv.value(index);
-            }
-            lend[i] = (int) length;
-            lenavg += length;
-        }
-        if (N > 1) {
-            lenavg /= (double) N;
-        }
-
-        Connection connection = null;
-        Statement statement = null;
-        PreparedStatement bulkInsert = null;
-
-        try {
-            // create a database connection
-            if (!SQLConnection.isEmpty()) {
-                connection = DriverManager.getConnection(SQLConnection);
-                statement = connection.createStatement();
-                statement.executeUpdate("create table if not exists TokensPerEntity (EntityId nvarchar(100), ItemType int, Token nvarchar(100), Counts double, TFIDFCounts double, ExperimentId nvarchar(50)) ");
-
-                statement.executeUpdate("create Index if not exists IX_TokensPerEntity_Entity_Counts ON TokensPerEntity ( EntityId, ExperimentId, ItemType, Counts DESC, TFIDFCounts DESC, Token)");
-                statement.executeUpdate("create Index if not exists IX_TokensPerEntity_Entity_TFIDFCounts ON TokensPerEntity ( EntityId, ExperimentId, ItemType,  TFIDFCounts DESC, Counts DESC, Token)");
-
-                statement.executeUpdate("create View if not exists TokensPerEntityView AS select rv1.EntityId, rv1.ItemType, rv1.Token, rv1.Counts, rv1.TFIDFCounts, rv1.ExperimentId \n"
-                        + "FROM TokensPerEntity rv1\n"
-                        + "WHERE Token in\n"
-                        + "(\n"
-                        + "SELECT Token\n"
-                        + "FROM TokensPerEntity rv2\n"
-                        + "WHERE EntityId = rv1.EntityId AND Counts>2 AND ItemType=rv1.ItemType AND ExperimentId=rv1.ExperimentId \n"
-                        + "ORDER BY\n"
-                        + "TFIDFCounts DESC\n"
-                        + "LIMIT 20\n"
-                        + ")");
-
-                String deleteSQL = String.format("Delete from TokensPerEntity where  ExperimentId = '%s' and itemtype= %d", experimentId, itemType);
-                statement.executeUpdate(deleteSQL);
-
-                String sql = "insert into TokensPerEntity values(?,?,?,?,?,?);";
-
-                connection.setAutoCommit(false);
-                bulkInsert = connection.prepareStatement(sql);
-
-                for (int i = 0; i < N; i++) {
-                    Instance instance = instances.get(i);
-
-                    FeatureVector fv = new FeatureVector((FeatureSequence) instance.getData());
-                    int[] indices = fv.getIndices();
-                    for (int index : indices) {
-                        double tf = fv.value(index);
-                        double tfcomp = tf / (tf + 0.5 + 1.5 * (double) lend[i] / lenavg);
-                        double idfcomp = Math.log((double) N / (double) df[index]) / Math.log(N + 1);
-                        double tfIdf = tfcomp * idfcomp;
-                        fv.setValue(index, tfIdf);
-                        String token = fv.getAlphabet().lookupObject(index).toString();
-
-                        bulkInsert.setString(1, instance.getName().toString());
-                        bulkInsert.setInt(2, itemType);
-                        bulkInsert.setString(3, token);
-                        bulkInsert.setDouble(4, tf);
-                        bulkInsert.setDouble(5, tfIdf);
-                        bulkInsert.setString(6, experimentId);
-
-                        bulkInsert.executeUpdate();
-                    }
-                }
-
-                connection.commit();
-            }
-        } catch (SQLException e) {
-
-            if (connection != null) {
-                try {
-                    logger.error("Transaction is being rolled back");
-                    connection.rollback();
-                } catch (SQLException excep) {
-                    logger.error("Error in insert TokensPerEntity");
-                }
-            }
-        } finally {
-            try {
-                if (bulkInsert != null) {
-                    bulkInsert.close();
-                }
-                connection.setAutoCommit(true);
-            } catch (SQLException excep) {
-                logger.error("Error in insert TokensPerEntity");
-            }
-        }
-
-        //TODO: Sort Feature Vector Values
-        // FeatureVector.toSimpFilefff
-    }
 
     public void createCitationGraphFile(String outputCsv, String SQLConnectionString) {
         //String SQLConnectionString = "jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
@@ -364,18 +252,9 @@ public class SciTopicFlow {
 
 
         Config.ExperimentType experimentType = config.getExperimentType();
-        String dictDir = config.getDictDir();
         byte numModalities = config.getNumModalities();
-        double pruneCntPerc = config.getPruneCntPerc();
-        double pruneLblCntPerc = config.getPruneLblCntPerc();
-        double pruneMaxPerc = config.getPruneMaxPerc();
-        int numChars = config.getNumChars();
-        Config.Net2BoWType PPRenabled = config.getPPRenabled();
         boolean ignoreText = config.isIgnoreText();
-        int limitDocs = config.getLimitDocs();
 
-
-        //String txtAlphabetFile = dictDir + File.separator + "dict[0].txt";
         // Begin by importing documents from text to feature sequences
         ArrayList<Pipe> pipeListText = new ArrayList<Pipe>();
 
@@ -412,7 +291,6 @@ public class SciTopicFlow {
             }
             instances[m] = new InstanceList(new SerialPipes(pipeListCSV));
         }
-
         //createCitationGraphFile("C:\\projects\\Datasets\\DBLPManage\\acm_output_NET.csv", "jdbc:sqlite:C:/projects/Datasets/DBLPManage/acm_output.db");
 
         // get inputs
