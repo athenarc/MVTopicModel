@@ -226,6 +226,10 @@ public class DBpediaAnnotator {
 
         BlockingQueue<pubText> pubsQueue = new ArrayBlockingQueue<pubText>(queueSize);
 
+        String sql_abstracts_project_reports=null;
+        String sql_abstracts_publications=null;
+        String sql_other_abstracts_publications=null;
+
         try {
             connection = DriverManager.getConnection(SQLConnectionString);
             String sql = "";
@@ -238,21 +242,104 @@ public class DBpediaAnnotator {
                         + "where doc_dbpediaresource.docid is null"; //   Limit 1000"
                 ;
             } else if (experimentType == ExperimentType.PubMed) {
+                //::text is typecasting to text.
+                // optimized query: hashing is much faster than seq scan
+                // below is the full-text-mining query:
+//                sql = "select doctxt_view.docid, text,  COALESCE(keywords , ''::text) as keywords \n"
+//                        + "from doctxt_view \n"
+//                        + "LEFT JOIN ( SELECT doc_subject.docid,\n"
+//                        + "    string_agg(DISTINCT doc_subject.subject, ','::text) AS keywords    \n"
+//                        + "   FROM  doc_subject     \n"
+//                        + "  GROUP BY doc_subject.docid) keywords_view ON keywords_view.docid = doctxt_view.docid \n"
+//                        + "LEFT JOIN doc_dbpediaresource ON doctxt_view.docid = doc_dbpediaresource.docid \n"
+//                        + "where doc_dbpediaresource.docid is null";
+                //System.out.println(sql);
+
+                // get abstracts from "abstract" field, for project reports
+                // get abstracts from "abstract_pmc" field, for publications
+                String abstracts_project_reports =
+                        " SELECT document.id AS docid,\n" +
+                        "            (((COALESCE(document.title, ''::text) || ' '::text) || COALESCE(document.abstract, ''::text)) || ' '::text) \n" +
+                        "            AS text,\n" +
+                        "    document.title,\n" +
+//                        "    COALESCE(document.abstract, ''::text) AS abstract,\n" +
+//                        "    COALESCE(document.other_abstract_pmc, ''::text) AS other_abstract,\n" +
+                        "    document.batchid,\n" +
+                        "    document.doctype,\n" +
+                        "    document.repository\n" +
+                        "   FROM document\n" +
+                        // "     LEFT JOIN doc_fulltext ON doc_fulltext.docid = document.id\n" +
+                        "  WHERE document.hastext = true AND document.doctype = 'project_report' OR document.doctype = 'guideline'\n";
+
+                String abstracts_publications =
+                        " SELECT document.id AS docid,\n" +
+                        "            (((COALESCE(document.title, ''::text) || ' '::text) || COALESCE(document.abstract_pmc, ''::text)) || ' '::text) \n" +
+                        "            AS text,\n" +
+                        "    document.title,\n" +
+//                        "    COALESCE(document.abstract_pmc, ''::text) AS abstract,\n" +
+//                        "    COALESCE(document.other_abstract_pmc, ''::text) AS other_abstract,\n" +
+                        "    document.batchid,\n" +
+                        "    document.doctype,\n" +
+                        "    document.repository\n" +
+                        "   FROM document\n" +
+                        // "     LEFT JOIN doc_fulltext ON doc_fulltext.docid = document.id\n" +
+                        "  WHERE document.hastext = true AND document.doctype = 'publication' AND document.language_pmc = 'eng'\n";
+
 
                 // optimized query: hashing is much faster than seq scan
-                sql = "select doctxt_view.docid, text,  COALESCE(keywords , ''::text) as keywords \n"
-                        + "from doctxt_view \n"
+                sql_abstracts_project_reports = "select abstracts_view.docid, text, COALESCE(keywords , ''::text) as keywords \n"
+                        + "from (" + abstracts_project_reports + ") as abstracts_view  \n"
                         + "LEFT JOIN ( SELECT doc_subject.docid,\n"
                         + "    string_agg(DISTINCT doc_subject.subject, ','::text) AS keywords    \n"
                         + "   FROM  doc_subject     \n"
-                        + "  GROUP BY doc_subject.docid) keywords_view ON keywords_view.docid = doctxt_view.docid \n"
-                        + "LEFT JOIN doc_dbpediaresource ON doctxt_view.docid = doc_dbpediaresource.docid \n"
-                        + "where doc_dbpediaresource.docid is null";
+                        + "  GROUP BY doc_subject.docid) keywords_view ON keywords_view.docid = abstracts_view.docid \n"
+                        + "LEFT JOIN doc_dbpediaresource ON abstracts_view.docid = doc_dbpediaresource.docid \n"
+                        + "where doc_dbpediaresource.docid is null limit 100";
+
+                sql_abstracts_publications = "select abstracts_view.docid, text, COALESCE(keywords , ''::text) as keywords \n"
+                        + "from (" + abstracts_publications + ") as abstracts_view  \n"
+                        + "LEFT JOIN ( SELECT doc_subject.docid,\n"
+                        + "    string_agg(DISTINCT doc_subject.subject, ','::text) AS keywords    \n"
+                        + "   FROM  doc_subject     \n"
+                        + "  GROUP BY doc_subject.docid) keywords_view ON keywords_view.docid = abstracts_view.docid \n"
+                        + "LEFT JOIN doc_dbpediaresource ON abstracts_view.docid = doc_dbpediaresource.docid \n"
+                        + "where doc_dbpediaresource.docid is null ";
+
+//                String other_abstracts_publications =
+//                        " SELECT document.id AS docid,\n" +
+//                                "            (((COALESCE(document.title, ''::text) || ' '::text) || COALESCE(document.other_abstract_pmc, ''::text)) || ' '::text) \n" +
+//                                "            AS text,\n" +
+//                                "    document.title,\n" +
+//                                //"    COALESCE(document.abstract_pmc, ''::text) AS abstract,\n" +
+//                                //"    COALESCE(document.other_abstract_pmc, ''::text) AS other_abstract,\n" +
+//                                "    document.batchid,\n" +
+//                                "    document.doctype,\n" +
+//                                "    document.repository\n" +
+//                                "   FROM document\n" +
+//                                //"     LEFT JOIN doc_fulltext ON doc_fulltext.docid = document.id\n" +
+//                                "  WHERE document.hastext = true AND document.doctype = 'publication' AND document.language_pmc = 'eng'" +
+//                                " and document.abstract_pmc is null\n";
+
+
+//                sql_other_abstracts_publications = "select abstracts_view.docid, text, COALESCE(keywords , ''::text) as keywords \n"
+//                        + "from (" + other_abstracts_publications + ") as abstracts_view  \n"
+//                        + "LEFT JOIN ( SELECT doc_subject.docid,\n"
+//                        + "    string_agg(DISTINCT doc_subject.subject, ','::text) AS keywords    \n"
+//                        + "   FROM  doc_subject     \n"
+//                        + "  GROUP BY doc_subject.docid) keywords_view ON keywords_view.docid = abstracts_view.docid \n"
+//                        + "LEFT JOIN doc_dbpediaresource ON abstracts_view.docid = doc_dbpediaresource.docid \n"
+//                        + "where doc_dbpediaresource.docid is null ";
+
+                System.out.println(sql);
+
             }
 
+            final int logBatchSize = 100000;
+            int counter;
             connection.setAutoCommit(false);
             Statement statement = connection.createStatement();
             statement.setFetchSize(queueSize);
+            ResultSet rs;
             logger.info("Get new publications");
 
             logger.info(String.format("Start annotation using %d threads, @ %s with %.2f confidence", numOfThreads, spotlightService, confidence));
@@ -263,10 +350,29 @@ public class DBpediaAnnotator {
                         pubsQueue, thread, httpClient, null, spotlightService.replace("x", Integer.toString(thread + 1)), confidence));
             }
 
-            ResultSet rs = statement.executeQuery(sql);
-            final int logBatchSize = 100000;
-            int counter = 0;
+            // projects
+            // -------------------------------
+//            logger.info("Query started...");
+//            ResultSet rs = statement.executeQuery(sql_abstracts_project_reports);
+//            logger.info("Query done!");
+//            // ResultSet rs = statement.executeQuery(sql_abstracts_project_reports);
+//            int counter = 0;
+//
+//            while (rs.next()) {
+//                String txt = rs.getString("keywords") + "\n" + rs.getString("text");
+//                String pubId = rs.getString("docid");
+//                // pubsQueue.put(new pubText(pubId, txt));
+//                counter++;
+//                if (counter % logBatchSize == 0) {
+//                    logger.info(String.format("Read total %s project reports",
+//                            counter));
+//                }
+//            }
+//            logger.info(String.format("Read a total of %s projects", counter));
+//            if (true) return;
 
+            counter = 0;
+            rs = statement.executeQuery(sql_abstracts_publications);
             while (rs.next()) {
                 String txt = rs.getString("keywords") + "\n" + rs.getString("text");
                 String pubId = rs.getString("docid");
@@ -277,6 +383,7 @@ public class DBpediaAnnotator {
                             counter));
                 }
             }
+            logger.info(String.format("Read a total of %s publications", counter));
 
             for (int i = 0; i < numOfThreads; i++) {
                 pubsQueue.put(new PubTextPoison());
@@ -323,9 +430,9 @@ public class DBpediaAnnotator {
         logger.info("DBPedia annotation started");
         c.getPropValues(null);
         logger.info("DBPedia annotation: Annotate new publications");
-        //c.annotatePubs(ExperimentType.PubMed, AnnotatorType.spotlight);
-        logger.info("DBPedia annotation: Get extra fields from DBPedia");
-        c.updateResourceDetails(ExperimentType.PubMed);
+        c.annotatePubs(ExperimentType.PubMed, AnnotatorType.spotlight);
+        //logger.info("DBPedia annotation: Get extra fields from DBPedia");
+        //c.updateResourceDetails(ExperimentType.PubMed);
 
     }
 }
