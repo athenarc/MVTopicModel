@@ -112,6 +112,7 @@ public class SciTopicFlow {
         if (StringUtils.isBlank(experimentId)) {
             experimentId = experimentString;
         }
+        experimentId = "junerun_" + experimentString;
 
         if (findKeyPhrases) {
             FindKeyPhrasesPerTopic(SQLConnectionString, experimentId, "openNLP");
@@ -1695,21 +1696,21 @@ public class SciTopicFlow {
 
                             break;
                         case PubMed:
-                            if (numModalities > 1) {
+                            if (numModalities > 4) {
                                 String tmpJournalStr = rs.getString("Keywords");//.replace("\t", ",");
                                 if (tmpJournalStr != null && !tmpJournalStr.equals("")) {
-                                    instanceBuffer.get(1).add(new Instance(tmpJournalStr.replace('-', ' ').toLowerCase(), null, rs.getString("docid"), "Keywords"));
+                                    instanceBuffer.get(4).add(new Instance(tmpJournalStr.replace('-', ' ').toLowerCase(), null, rs.getString("docid"), "Keywords"));
+                                }
+                            }
+
+                            if (numModalities > 1) {
+                                String tmpMeshTermsStr = rs.getString("meshterms");//.replace("\t", ",");
+                                if (tmpMeshTermsStr != null && !tmpMeshTermsStr.equals("")) {
+                                    instanceBuffer.get(1).add(new Instance(tmpMeshTermsStr.replace('-', ' ').toLowerCase(), null, rs.getString("docid"), "MeshTerms"));
                                 }
                             }
 
                             if (numModalities > 2) {
-                                String tmpMeshTermsStr = rs.getString("meshterms");//.replace("\t", ",");
-                                if (tmpMeshTermsStr != null && !tmpMeshTermsStr.equals("")) {
-                                    instanceBuffer.get(2).add(new Instance(tmpMeshTermsStr.replace('-', ' ').toLowerCase(), null, rs.getString("docid"), "MeshTerms"));
-                                }
-                            }
-
-                            if (numModalities > 3) {
                                 String tmpStr = rs.getString("DBPediaResources");//.replace("\t", ",");
                                 //http://dbpedia.org/resource/Aerosol:3;http://dbpedia.org/resource/Growth_factor:4;http://dbpedia.org/resource/Hygroscopy:4;http://dbpedia.org/resource/Planetary_boundary_layer:3
                                 String DBPediaResourceStr = "";
@@ -1727,7 +1728,7 @@ public class SciTopicFlow {
                                         }
                                     }
                                     DBPediaResourceStr = DBPediaResourceStr.substring(0, DBPediaResourceStr.length() - 1);
-                                    instanceBuffer.get(3).add(new Instance(DBPediaResourceStr, null, rs.getString("docid"), "DBPediaResources"));
+                                    instanceBuffer.get(2).add(new Instance(DBPediaResourceStr, null, rs.getString("docid"), "DBPediaResources"));
                                 }
                             }
 
@@ -1820,7 +1821,7 @@ public class SciTopicFlow {
                         FeatureSequence fs = (FeatureSequence) instance.getData();
 
                         int prCnt = (int) Math.round(instanceBuffer.get(m).size() * pruneLblCntPerc);
-                        fs.prune(counts, newAlphabet, ((m == 4 && experimentType == ExperimentType.ACM && PPRenabled == Net2BoWType.PPR) || (m == 3 && experimentType == ExperimentType.PubMed)) ? prCnt * 4 : prCnt);
+                        fs.prune(counts, newAlphabet, ((m == 3 && experimentType == ExperimentType.ACM && PPRenabled == Net2BoWType.PPR) || (m == 2 && experimentType == ExperimentType.PubMed)) ? prCnt * 4 : prCnt);
 
                         newInstanceList.add(newPipe.instanceFrom(new Instance(fs, instance.getTarget(),
                                 instance.getName(),
