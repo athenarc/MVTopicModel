@@ -261,6 +261,7 @@ public class SciTopicFlow {
             pruneMaxPerc = Double.parseDouble(prop.getProperty("PruneMaxPerc"));
             SQLConnectionString = prop.getProperty("SQLConnectionString");
             experimentId = prop.getProperty("ExperimentId");
+            limitDocs = Integer.parseInt(prop.getProperty("limitDocs"));
 
         } catch (Exception e) {
             logger.error("Exception in reading properties: " + e);
@@ -1533,12 +1534,12 @@ public class SciTopicFlow {
                 if (D4I) {
 
                     // pubs
-                    String query = "select distinct ON (id)  document.id, " +
+                    String query = "select distinct ON (document.id)  document.id as docid, " +
                             "substr((((COALESCE(pmc_titles_temp.title, ''::text) || ' '::text) || substr(COALESCE(document.abstract_pmc, ''::text), 0, 7000)) || ' '::text), 0, 10000) AS text,"
                             + "batchid from document \n"
                             + " LEFT JOIN doc_project on doc_project.docid = document.id  \n" +
                             "left join pmc_titles_temp on pmc_titles_temp.docid = document.id \n"
-                            + "where doctype='publication' and batchid > '2004' and (language_pmc is null or language_pmc = 'eng') and document.abstract_pmc is not null\n"
+                            + "where document.doctype='publication' and batchid > '2004' and (language_pmc is null or language_pmc = 'eng') and document.abstract_pmc is not null\n"
                             + "and (repository = 'PubMed Central' OR  doc_project.projectid IN \n"
                             + "(select projectid from doc_project\n"
                             + "join document on doc_project.docid = document.id and repository = 'PubMed Central'\n"
@@ -1549,12 +1550,12 @@ public class SciTopicFlow {
                     txtsql.add(query);
 
                     // pubs other
-                    query = "select distinct ON (id)  document.id, " +
+                    query = "select distinct ON (document.id)  document.id as docid, " +
                             "substr((((COALESCE(pmc_titles_temp.title, ''::text) || ' '::text) || substr(COALESCE(document.other_abstract_pmc, ''::text), 0, 7000)) || ' '::text), 0, 10000) AS text,"
                             + "batchid from document \n"
                             + " LEFT JOIN doc_project on doc_project.docid = document.id  \n" +
                             "left join pmc_titles_temp on pmc_titles_temp.docid = document.id \n"
-                            + "where doctype='publication' and  batchid > '2004' and (language_pmc is null or language_pmc = 'eng') and document.abstract_pmc is null and document.other_abstract_pmc is not null\n"
+                            + "where document.doctype='publication' and  batchid > '2004' and (language_pmc is null or language_pmc = 'eng') and document.abstract_pmc is null and document.other_abstract_pmc is not null\n"
                             + "and (repository = 'PubMed Central' OR  doc_project.projectid IN \n"
                             + "(select projectid from doc_project\n"
                             + "join document on doc_project.docid = document.id and repository = 'PubMed Central'\n"
@@ -1563,14 +1564,13 @@ public class SciTopicFlow {
                             + "Order by document.id \n"
                             + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");//+ " LIMIT 10000";
                     txtsql.add(query);
-
-                    // projreps
-                    query = "select distinct ON (id)  document.id, " +
+// projreps
+                    query = "select distinct ON (document.id)  document.id as docid, " +
                             "substr((((COALESCE(pmc_titles_temp.title, ''::text) || ' '::text) || substr(COALESCE(document.abstract, ''::text), 0, 7000)) || ' '::text), 0, 10000) AS text,"
                             + "batchid from document \n"
                             + " LEFT JOIN doc_project on doc_project.docid = document.id \n" +
                             " left join pmc_titles_temp on pmc_titles_temp.docid = document.id \n"
-                            + "where batchid > '2004' and doctype='project_report' and (language_pmc is null or language_pmc = 'eng')\n"
+                            + "where batchid > '2004' and document.doctype='project_report' and (language_pmc is null or language_pmc = 'eng')\n"
                             + "and (repository = 'PubMed Central' OR  doc_project.projectid IN \n"
                             + "(select projectid from doc_project\n"
                             + "join document on doc_project.docid = document.id and repository = 'PubMed Central'\n"
@@ -1580,23 +1580,15 @@ public class SciTopicFlow {
                             + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");//+ " LIMIT 10000";
                     txtsql.add(query);
 
+                    System.out.println("TEXT QUERIES ===============");
                     for (String q: txtsql) System.out.println(q);
                 }
 
             }
 
             if (experimentType == ExperimentType.ACM) {
-
-                if (PPRenabled == Net2BoWType.PPR) {
-                    sql = " select  docid,   citations, categories, period, keywords, venue, DBPediaResources from docsideinfo_view  " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-                } else if (PPRenabled == Net2BoWType.OneWay) {
-
-                    sql = " select  docid,  citations, categories, keywords, venue, DBPediaResources from docsideinfo_view " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-                } else if (PPRenabled == Net2BoWType.TwoWay) {
-                    sql = " select  docid, authors, citations, categories, keywords, venue, DBPediaResources from docsideinfo_view " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-
-                }
-
+                // pass
+                ;
             } else if (experimentType == ExperimentType.PubMed) {
                 sql = " select  docid, keywords, meshterms, dbpediaresources  from docsideinfo_view  where repository = 'PubMed Central' " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
                 if (D4I) {
@@ -1604,10 +1596,10 @@ public class SciTopicFlow {
                     String query = "select distinct ON (docsideinfo_view.docid)  docsideinfo_view.docid, keywords, meshterms, dbpediaresources  \n"
                             + "from docsideinfo_view  \n"
                             + "LEFT JOIN doc_project on doc_project.docid = docsideinfo_view.docId\n"
-                            + "LEFT JOIN document on document.docid = docsideinfo_view.docId\n"
+                            + "LEFT JOIN document on document.id = docsideinfo_view.docId\n"
 
-                            + "where doctype='publication' and batchid > '2004' and (language_pmc is null or language_pmc = 'eng') and document.abstract_pmc is not null\n"
-                            + "and (repository = 'PubMed Central' OR  doc_project.projectid IN \n"
+                            + "where document.doctype='publication' and document.batchid > '2004' and (language_pmc is null or language_pmc = 'eng') and document.abstract_pmc is not null\n"
+                            + "and (document.repository = 'PubMed Central' OR  doc_project.projectid IN \n"
                             + "(select projectid from doc_project\n"
                             + "join document on doc_project.docid = document.id and repository = 'PubMed Central'\n"
                             + "group by projectid\n"
@@ -1620,9 +1612,9 @@ public class SciTopicFlow {
                     query = "select distinct ON (docsideinfo_view.docid)  docsideinfo_view.docid, keywords, meshterms, dbpediaresources  \n"
                             + "from docsideinfo_view  \n"
                             + "LEFT JOIN doc_project on doc_project.docid = docsideinfo_view.docId\n"
-                            + "LEFT JOIN document on document.docid = docsideinfo_view.docId\n"
-                            + "where doctype='publication' and  batchid > '2004' and (language_pmc is null or language_pmc = 'eng') and document.abstract_pmc is null and document.other_abstract_pmc is not null\n"
-                            + "and (repository = 'PubMed Central' OR  doc_project.projectid IN \n"
+                            + "LEFT JOIN document on document.id = docsideinfo_view.docId\n"
+                            + "where document.doctype='publication' and  document.batchid > '2004' and (language_pmc is null or language_pmc = 'eng') and document.abstract_pmc is null and document.other_abstract_pmc is not null\n"
+                            + "and (document.repository = 'PubMed Central' OR  doc_project.projectid IN \n"
                             + "(select projectid from doc_project\n"
                             + "join document on doc_project.docid = document.id and repository = 'PubMed Central'\n"
                             + "group by projectid\n"
@@ -1636,9 +1628,9 @@ public class SciTopicFlow {
                     query = "select distinct ON (docsideinfo_view.docid)  docsideinfo_view.docid, keywords, meshterms, dbpediaresources  \n"
                             + "from docsideinfo_view  \n"
                             + "LEFT JOIN doc_project on doc_project.docid = docsideinfo_view.docId\n"
-                            + "LEFT JOIN document on document.docid = docsideinfo_view.docId\n"
-                            + "where batchid > '2004' and doctype='project_report' and (language_pmc is null or language_pmc = 'eng')\n"
-                            + "and (repository = 'PubMed Central' OR  doc_project.projectid IN \n"
+                            + "LEFT JOIN document on document.id = docsideinfo_view.docId\n"
+                            + "where document.batchid > '2004' and document.doctype='project_report' and (language_pmc is null or language_pmc = 'eng')\n"
+                            + "and (document.repository = 'PubMed Central' OR  doc_project.projectid IN \n"
                             + "(select projectid from doc_project\n"
                             + "join document on doc_project.docid = document.id and repository = 'PubMed Central'\n"
                             + "group by projectid\n"
@@ -1647,19 +1639,23 @@ public class SciTopicFlow {
                             + "Order by docsideinfo_view.docId \n"
                             + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
                     sidesql.add(query);
+
+
+                    System.out.println("SIDEVIEW QUERIES ===============");
+                    for (String q: sidesql) System.out.println(q);
                 }
 
             }
 
             logger.info(" Getting text from the database");
             for (String query : txtsql) {
+
                 // get txt data
                 Statement txtstatement = connection.createStatement();
-                txtstatement.setFetchSize(10000);
+                txtstatement.setFetchSize(10000); System.out.println("Executing text retrieval query " + (txtsql.indexOf(query)+1) + " / " + txtsql.size());
                 ResultSet rstxt = txtstatement.executeQuery(query);
 
                 while (rstxt.next()) {
-
                     String txt = "";
 
                     switch (experimentType) {
@@ -1675,10 +1671,10 @@ public class SciTopicFlow {
                     }
                 }
             }
-
+            logger.info(" Getting side info from the database");
             if (numModalities > 1) {
                 for (String ssql : sidesql){
-                    logger.info(" Getting side info from the database");
+                    System.out.println("Executing non-text modalities retrieval query " + (sidesql.indexOf(ssql)+1) + " / " + sidesql.size());
                     Statement statement = connection.createStatement();
                     statement.setFetchSize(10000);
                     ResultSet rs = statement.executeQuery(ssql);
@@ -1750,7 +1746,12 @@ public class SciTopicFlow {
             }
         }
 
-        logger.info("Read " + instanceBuffer.get(0).size() + " instances modality: " + instanceBuffer.get(0).get(0).getSource().toString());
+        if (instanceBuffer.get(0).isEmpty()){
+            logger.error("No text retrieved. Exiting");
+            System.exit(1);
+        }
+        for (int k =0; k<instanceBuffer.size(); ++k) logger.info("Read " + instanceBuffer.get(k).size() + " instances for modality " + k);
+        //logger.info("Read " + instanceBuffer.get(0).size() + " instances modality: " + instanceBuffer.get(0).get(0).getSource().toString());
 
         if (!ignoreText) {
             try {
