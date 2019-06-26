@@ -81,7 +81,8 @@ public class SciTopicFlow {
     String SQLConnectionString = "jdbc:postgresql://localhost:5432/tender?user=postgres&password=postgres&ssl=false"; //"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
     String experimentId = "";
     String previousModelFile = "";
-    int limitDocs = 1000;
+    int limitDocs = -1;
+    String experimentPrefix = "";
     boolean D4I = true;
 
     public SciTopicFlow() throws IOException {
@@ -112,7 +113,10 @@ public class SciTopicFlow {
         if (StringUtils.isBlank(experimentId)) {
             experimentId = experimentString;
         }
-        experimentId = "junerun_" + experimentString;
+        if (!StringUtils.isBlank(experimentPrefix))
+		experimentId = experimentPrefix + "_" + experimentId;
+
+	logger.info("Experiment ID: " + experimentId);
 
         if (findKeyPhrases) {
             FindKeyPhrasesPerTopic(SQLConnectionString, experimentId, "openNLP");
@@ -261,10 +265,12 @@ public class SciTopicFlow {
             pruneMaxPerc = Double.parseDouble(prop.getProperty("PruneMaxPerc"));
             SQLConnectionString = prop.getProperty("SQLConnectionString");
             experimentId = prop.getProperty("ExperimentId");
-            limitDocs = Integer.parseInt(prop.getProperty("limitDocs"));
+            limitDocs = Integer.parseInt(prop.getProperty("limitDocs", "-1"));
+            experimentPrefix = prop.getProperty("ExperimentPrefix", "");
 
         } catch (Exception e) {
             logger.error("Exception in reading properties: " + e);
+	    System.exit(1);
         } finally {
             inputStream.close();
         }
@@ -1590,13 +1596,13 @@ public class SciTopicFlow {
                 // pass
                 ;
             } else if (experimentType == ExperimentType.PubMed) {
-                sql = " select  docid, keywords, meshterms, dbpediaresources  from docsideinfo_view  where repository = 'PubMed Central' " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+                sql = " select  docid, keywords, meshterms, dbpediaresources  from docsideinfo_norescount_view  where repository = 'PubMed Central' " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
                 if (D4I) {
 
-                    String query = "select distinct ON (docsideinfo_view.docid)  docsideinfo_view.docid, keywords, meshterms, dbpediaresources  \n"
-                            + "from docsideinfo_view  \n"
-                            + "LEFT JOIN doc_project on doc_project.docid = docsideinfo_view.docId\n"
-                            + "LEFT JOIN document on document.id = docsideinfo_view.docId\n"
+                    String query = "select distinct ON (docsideinfo_norescount_view.docid)  docsideinfo_norescount_view.docid, keywords, meshterms, dbpediaresources  \n"
+                            + "from docsideinfo_norescount_view  \n"
+                            + "LEFT JOIN doc_project on doc_project.docid = docsideinfo_norescount_view.docId\n"
+                            + "LEFT JOIN document on document.id = docsideinfo_norescount_view.docId\n"
 
                             + "where document.doctype='publication' and document.batchid > '2004' and (language_pmc is null or language_pmc = 'eng') and document.abstract_pmc is not null\n"
                             + "and (document.repository = 'PubMed Central' OR  doc_project.projectid IN \n"
@@ -1605,14 +1611,14 @@ public class SciTopicFlow {
                             + "group by projectid\n"
                             + "having count(*) > 5) )\n"
 
-                            + "Order by docsideinfo_view.docId \n"
+                            + "Order by docsideinfo_norescount_view.docId \n"
                             + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
                     sidesql.add(query);
 
-                    query = "select distinct ON (docsideinfo_view.docid)  docsideinfo_view.docid, keywords, meshterms, dbpediaresources  \n"
-                            + "from docsideinfo_view  \n"
-                            + "LEFT JOIN doc_project on doc_project.docid = docsideinfo_view.docId\n"
-                            + "LEFT JOIN document on document.id = docsideinfo_view.docId\n"
+                    query = "select distinct ON (docsideinfo_norescount_view.docid)  docsideinfo_norescount_view.docid, keywords, meshterms, dbpediaresources  \n"
+                            + "from docsideinfo_norescount_view  \n"
+                            + "LEFT JOIN doc_project on doc_project.docid = docsideinfo_norescount_view.docId\n"
+                            + "LEFT JOIN document on document.id = docsideinfo_norescount_view.docId\n"
                             + "where document.doctype='publication' and  document.batchid > '2004' and (language_pmc is null or language_pmc = 'eng') and document.abstract_pmc is null and document.other_abstract_pmc is not null\n"
                             + "and (document.repository = 'PubMed Central' OR  doc_project.projectid IN \n"
                             + "(select projectid from doc_project\n"
@@ -1620,15 +1626,15 @@ public class SciTopicFlow {
                             + "group by projectid\n"
                             + "having count(*) > 5) )\n"
 
-                            + "Order by docsideinfo_view.docId \n"
+                            + "Order by docsideinfo_norescount_view.docId \n"
                             + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
                     sidesql.add(query);
 
 
-                    query = "select distinct ON (docsideinfo_view.docid)  docsideinfo_view.docid, keywords, meshterms, dbpediaresources  \n"
-                            + "from docsideinfo_view  \n"
-                            + "LEFT JOIN doc_project on doc_project.docid = docsideinfo_view.docId\n"
-                            + "LEFT JOIN document on document.id = docsideinfo_view.docId\n"
+                    query = "select distinct ON (docsideinfo_norescount_view.docid)  docsideinfo_norescount_view.docid, keywords, meshterms, dbpediaresources  \n"
+                            + "from docsideinfo_norescount_view  \n"
+                            + "LEFT JOIN doc_project on doc_project.docid = docsideinfo_norescount_view.docId\n"
+                            + "LEFT JOIN document on document.id = docsideinfo_norescount_view.docId\n"
                             + "where document.batchid > '2004' and document.doctype='project_report' and (language_pmc is null or language_pmc = 'eng')\n"
                             + "and (document.repository = 'PubMed Central' OR  doc_project.projectid IN \n"
                             + "(select projectid from doc_project\n"
@@ -1636,7 +1642,7 @@ public class SciTopicFlow {
                             + "group by projectid\n"
                             + "having count(*) > 5) )\n"
 
-                            + "Order by docsideinfo_view.docId \n"
+                            + "Order by docsideinfo_norescount_view.docId \n"
                             + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
                     sidesql.add(query);
 
