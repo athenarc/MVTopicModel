@@ -1,6 +1,8 @@
 ----------------------------
 
 --Group 
+
+-- modified for the run with 3 modalities: text, mesh, dbpedia terms
 copy
 (
 
@@ -20,9 +22,9 @@ SELECT TopicDescription.TopicId AS TopicId,
            WHEN - 2 THEN 'KeyPhrase' 
            WHEN - 1 THEN 'Phrase' 
            WHEN 0 THEN 'Word' 
-           WHEN 1 THEN 'Keyword' 
-           WHEN 2 THEN 'MeshTerm'  
-           WHEN 3 THEN 'DBpedia'                   
+           -- WHEN 1 THEN 'Keyword' 
+           WHEN 1 THEN 'MeshTerm'  
+           WHEN 2 THEN 'DBpedia'                   
            --WHEN 4 THEN 'Citation'            
            END AS Modality,          
 
@@ -31,8 +33,8 @@ SELECT TopicDescription.TopicId AS TopicId,
            WHEN - 1 THEN Item 
            WHEN 0 THEN Item 
            WHEN 1 THEN Item
-           WHEN 2 THEN Item
-           WHEN 3 THEN substring(item,29,length(item))                   
+           -- WHEN 2 THEN Item
+           WHEN 2 THEN substring(item,29,length(item))                   
            --WHEN 4 THEN Publication.title            
            END AS concept,   
            Item,
@@ -89,7 +91,7 @@ SELECT TopicDescription.TopicId AS TopicId,
 		   from DBPediaResource
 	       left join dbpediaresourcetype on dbpediaresourcetype.resourceid = id
 				  ) DBPediaResourceDetails  ON DBPediaResourceDetails.Id = Item AND 
-                     TopicDescription.ItemType = 3
+                     TopicDescription.ItemType = 2
            
            --LEFT OUTER JOIN
            --document ON document.Id = Item AND 
