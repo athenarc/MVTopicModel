@@ -51,18 +51,6 @@
         </dependency>
     </dependencies>
 
-    <profiles>
-        <profile>
-            <id>local</id>
-            <activation>
-                <activeByDefault>false</activeByDefault>
-            </activation>
-            <properties>
-                <pom.model.path>resources/model.example.txt</pom.model.path>
-            </properties>
-        </profile>
-    </profiles>
-
     <build>
         <resources>
             <resource>
