@@ -15,10 +15,24 @@ public class ModelLoader implements ApplicationListener<ContextRefreshedEvent> {
     @Value("${model.path}")
     private String modelPath;
 
+
     @Override
     public void onApplicationEvent(ContextRefreshedEvent contextRefreshedEvent) {
         // TODO load from disk on application startup using model path variable
         // TODO set the model.path in MVTopicModelRestAPI pom.xml in properties in profile
         logger.info("Model path is: " + modelPath);
+        logger.info("Deferring model loading for now");
+
+        // try catch model loading here
+
+
+
+        // load the postgresql driver
+        try {
+            Class.forName("org.postgresql.Driver");
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+            logger.error(e.getMessage());
+        }
     }
 }

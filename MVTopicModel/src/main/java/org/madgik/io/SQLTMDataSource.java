@@ -833,5 +833,48 @@ public class SQLTMDataSource extends TMDataSource {
 
     }
 
+    private Double getPhraseBoost(String expid) throws SQLException {
+        ResultSet rs = query("select phraseboost from experiment where experimentid = '" + expid + "'");
+        while(rs.next()) return rs.getDouble("phraseboost");
+        return null;
+    }
+
+    public Map<Integer, Map<String, Map<String, Double>>> getTopicInformation(String query, double prob_threshold, String expid) throws SQLException {
+
+        Map<Integer, Map<String, Map<String, Double>>> res = new HashMap<>();
+        // from topic details: topic index, topic total tokens,
+        double phraseboost = getPhraseBoost(expid);
+        ResultSet rs = query(query);
+        while (rs.next()){
+            int topic_id = rs.getInt("topicid");
+
+            if (!res.containsKey(topic_id)) res.put(topic_id, new HashMap<>());
+
+            // double topic_weight = rs.getDouble("topicweight");
+            // if (!res.containsKey("overall_weight")) res.put("overall_weight", topic_weight);
+
+            int total_tokens = rs.getInt("totaltokens");
+            int modality_type = rs.getInt("itemtype");
+            String modality_name = rs.getString("modality");
+            if (!res.get(topic_id).containsKey(modality_name)) res.get(topic_id).put(modality_name, new HashMap<>());
+
+            String token_name = rs.getString("concept");
+            if (res.get(topic_id).get(modality_name).containsKey(token_name)){
+                logger.error(String.format("Duplicate token %s for modality %s and topic %d !", token_name, modality_name, topic_id));
+            }
+            String alternative_token_name = rs.getString("item");
+            int token_count = rs.getInt("counts");
+            double token_discriminativenenss = rs.getDouble("discrweight");
+            double token_weighted_count = rs.getDouble("weightedcounts");
+            double token_importance = ((double)token_count) / total_tokens;
+            if (modality_name.equals("phrase")) token_importance /= phraseboost;
+            if (token_importance < prob_threshold) continue;
+            res.get(topic_id).get(modality_name).put(token_name, token_importance);
+
+            //Map<String, Map<String, Map<String, Double>>> res = new HashMap<>();
+        }
+        return res;
+    }
+
 
     }
