@@ -8,6 +8,7 @@ import edu.stanford.nlp.util.Triple;
 import org.madgik.MVTopicModel.FastQMVWVTopicModelDiagnostics;
 import org.madgik.config.Config;
 import org.madgik.model.DocumentTopicAssignment;
+import org.madgik.model.LightDocument;
 import org.madgik.model.Modality;
 import org.madgik.model.TopicData;
 import org.madgik.utils.Utils;
@@ -872,6 +873,47 @@ public class SQLTMDataSource extends TMDataSource {
             res.get(topic_id).get(modality_name).put(token_name, token_importance);
 
             //Map<String, Map<String, Map<String, Double>>> res = new HashMap<>();
+        }
+        return res;
+    }
+
+
+    public List<LightDocument> getDocumentVisualizationInformation(String query, int numChars) throws SQLException {
+        ResultSet rs = query(query);
+        String text = "";
+        List<LightDocument> res = new ArrayList<>();
+
+        while (rs.next()) {
+            String docid = rs.getString("id");
+            String type = rs.getString("doctype");
+            String pubyear = rs.getString("pubyear");
+            String project = rs.getString("projectAcronym");
+            if (project == null || project.isEmpty()) project = rs.getString("project");
+            String journal = rs.getString("journal");
+            if (type.equals("project_report")) text = rs.getString("abstract");
+            else if (type.equals("publication")) {
+                text = rs.getString("abstract_pmc");
+                if (text == null || text.isEmpty()) text = rs.getString("other_abstract_pmc");
+                if (text == null) text = "";
+            }
+            text = (numChars > text.length()) ? text : text.substring(0, numChars) + "...";
+            if (project == null) project = "";
+            if (journal == null) journal = "";
+            res.add(new LightDocument(docid, type, text, pubyear, journal, project));
+        }
+        return res;
+    }
+
+    public Map<Integer, Map<String, Double>> getDocumentTopicWeights(String query, double weight_threshold) throws SQLException {
+        ResultSet rs = query(query);
+        Map<Integer, Map<String, Double>>  res = new HashMap<>();
+        while(rs.next()){
+            int topic_id = rs.getInt("topicid");
+            String document_id = rs.getString("documentid");
+            double weight = rs.getDouble("weight");
+            if (weight < weight_threshold) continue;
+            if (!res.containsKey(topic_id)) res.put(topic_id, new HashMap<>());
+            res.get(topic_id).put(document_id, weight);
         }
         return res;
     }
