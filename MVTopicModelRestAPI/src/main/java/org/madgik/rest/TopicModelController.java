@@ -137,11 +137,16 @@ public class TopicModelController {
     }
 
     @RequestMapping("/topics")
-    public String getTopicInformation(String expid, Double prob_threshold, Boolean refresh) {
+    public String getTopicInformation(String expid, Double prob_threshold, String weight_type, Boolean refresh) {
 
         if (expid == null || expid.isEmpty()) expid = "JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay";
         if (prob_threshold == null) prob_threshold = 0.05d;
         if (refresh == null) refresh = false;
+        if (weight_type == null) weight_type = "across_topics";
+        if (!(weight_type.equals("across_topics") || weight_type.equals("within_topic"))){
+            logger.error("Undefined weight type: " + weight_type);
+            return null;
+        }
 
         String serialization_path = serializationBasePath + "topic_tokens_exp_" + expid + "_probthresh_" + prob_threshold;
 
@@ -155,7 +160,7 @@ public class TopicModelController {
             String query = new String(Files.readAllBytes(Paths.get(sqlTopicInfoQueryPath)));
             query = query.replaceAll("EXPERIMENT_IDENTIFIER", "'" + expid + "'");
             SQLTMDataSource ds = new SQLTMDataSource(sqlConnectionString);
-            res = ds.getTopicInformation(query, prob_threshold, expid);
+            res = ds.getTopicInformation(query, prob_threshold, weight_type, expid);
         } catch (IOException e) {
             logger.error(e.getMessage());
         } catch (SQLException e) {
@@ -187,6 +192,8 @@ public class TopicModelController {
         tmc.sqlConnectionString = p.getProperty("sql.connection.string");
         tmc.sqlDocumentVisualizationInfoQueryPath = p.getProperty("sql.documentvisualizationinfo.querypath");
         tmc.sqlDocumentTopicInfoQueryPath = p.getProperty("sql.documenttopicinfo.querypath");
+        tmc.sqlTopicInfoQueryPath=p.getProperty("sql.topicinfo.querypath");
+        tmc.getTopicInformation(null, null, "within_topic", true);
         tmc.getDocumentsPerTopic(null, null,null);
         tmc.getDocumentInformation(ids,null);
     }

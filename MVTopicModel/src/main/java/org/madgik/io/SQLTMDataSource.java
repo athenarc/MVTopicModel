@@ -1,10 +1,6 @@
 package org.madgik.io;
 
-import cc.mallet.types.IDSorter;
 import cc.mallet.types.Instance;
-import cc.mallet.types.LabelSequence;
-import edu.stanford.nlp.util.Quadruple;
-import edu.stanford.nlp.util.Triple;
 import org.madgik.MVTopicModel.FastQMVWVTopicModelDiagnostics;
 import org.madgik.config.Config;
 import org.madgik.model.DocumentTopicAssignment;
@@ -840,35 +836,86 @@ public class SQLTMDataSource extends TMDataSource {
         return null;
     }
 
-    public Map<Integer, Map<String, Map<String, Double>>> getTopicInformation(String query, double prob_threshold, String expid) throws SQLException {
+    Map<Integer, Map<String, Integer>> getTokenCountAcrossTopics(String expid) throws SQLException {
+        String query = "select item, itemtype, sum(counts) as count from topicanalysis where experimentid = '" + expid + "' group by (item, itemtype);";
+        ResultSet rs = query(query);
+        Map<Integer, Map<String, Integer>>  res = new HashMap<>();
+        while (rs.next()){
+            int modalityType = rs.getInt("itemtype");
+            String token = rs.getString("item");
+            int count = rs.getInt("count");
+            if (! res.containsKey(modalityType)) res.put(modalityType, new HashMap<>());
+            res.get(modalityType).put(token, count);
+        }
+        return res;
+    }
+
+    Map<Integer, Map<Integer, Integer>> getTopicTokenCounts(String expid) throws SQLException {
+        String query = "select topicid, itemtype, sum(counts) as count from topicanalysis where experimentid = '" + expid + "' group by (topicid, itemtype);";
+        ResultSet rs = query(query);
+        Map<Integer, Map<Integer, Integer>>  res = new HashMap<>();
+        while (rs.next()){
+            int topicid = rs.getInt("topicid");
+            int modalityid = rs.getInt("itemtype");
+            int count = rs.getInt("count");
+            if (! res.containsKey(topicid)) res.put(topicid, new HashMap<>());
+            res.get(topicid).put(modalityid, count);
+        }
+        return res;
+    }
+
+    public Map<Integer, Map<String, Map<String, Double>>> getTopicInformation(String query, double prob_threshold, String weight_type, String expid) throws SQLException {
+
 
         Map<Integer, Map<String, Map<String, Double>>> res = new HashMap<>();
         // from topic details: topic index, topic total tokens,
         double phraseboost = getPhraseBoost(expid);
+        Map<Integer, Map<String, Integer>> tokenCountsAcrossTopics = getTokenCountAcrossTopics(expid);
+        Map<Integer, Map<Integer, Integer>> topicTokenCounts = getTopicTokenCounts(expid);
+
         ResultSet rs = query(query);
+
+        String [] modalityNames = {"Text", "MESH", "DBPedia"};
         while (rs.next()){
             int topic_id = rs.getInt("topicid");
+            int modality_id = rs.getInt("modalityid");
+            String modality_name = (modality_id >=0) ? modalityNames[modality_id] : "Phrase";
+            String token_name = rs.getString("item");
+            int token_count = rs.getInt("counts");
 
             if (!res.containsKey(topic_id)) res.put(topic_id, new HashMap<>());
-
-            // double topic_weight = rs.getDouble("topicweight");
-            // if (!res.containsKey("overall_weight")) res.put("overall_weight", topic_weight);
-
-            int total_tokens = rs.getInt("totaltokens");
-            int modality_type = rs.getInt("itemtype");
-            String modality_name = rs.getString("modality");
             if (!res.get(topic_id).containsKey(modality_name)) res.get(topic_id).put(modality_name, new HashMap<>());
-
-            String token_name = rs.getString("concept");
             if (res.get(topic_id).get(modality_name).containsKey(token_name)){
                 logger.error(String.format("Duplicate token %s for modality %s and topic %d !", token_name, modality_name, topic_id));
             }
-            String alternative_token_name = rs.getString("item");
-            int token_count = rs.getInt("counts");
-            double token_discriminativenenss = rs.getDouble("discrweight");
-            double token_weighted_count = rs.getDouble("weightedcounts");
-            double token_importance = ((double)token_count) / total_tokens;
-            if (modality_name.equals("phrase")) token_importance /= phraseboost;
+            int total_tokens_in_topic = topicTokenCounts.get(topic_id).get(modality_id);
+            int total_tokens_across_topics = tokenCountsAcrossTopics.get(modality_id).get(token_name);
+
+            // if (modality_name.equals("Phrase")){
+            //     token_count *= phraseboost;
+            // }
+
+            // calc token importance
+            // this below is the regular topic modelling probability
+            double token_importance_within_topic = ((double)token_count) / total_tokens_in_topic;
+            // this below is the token weight in this topic, compared to other topics
+            double token_importance_across_topics = ((double)token_count) / total_tokens_across_topics;
+
+            if (token_importance_across_topics > 1 || token_importance_within_topic > 1 ||
+                token_importance_across_topics < 0 || token_importance_within_topic < 0) {
+                logger.error(String.format("Problematic weights for topic %d modality %s token %s : within-top: %f accross-top: %f", topic_id, modality_name, token_name, token_importance_within_topic, token_importance_across_topics));
+                continue;
+            }
+            double token_importance = -1;
+            if (weight_type.equals("within_topic"))
+                token_importance = token_importance_within_topic;
+            else if (weight_type.equals("across_topics"))
+                token_importance = token_importance_across_topics;
+            else{
+                logger.error("Undefined weight type: " + weight_type);
+                return null;
+            }
+
             if (token_importance < prob_threshold) continue;
             res.get(topic_id).get(modality_name).put(token_name, token_importance);
 
@@ -878,6 +925,13 @@ public class SQLTMDataSource extends TMDataSource {
     }
 
 
+    /** Builds a light weight view of a document object, suitable for visualization
+     *
+     * @param query
+     * @param numChars
+     * @return
+     * @throws SQLException
+     */
     public List<LightDocument> getDocumentVisualizationInformation(String query, int numChars) throws SQLException {
         ResultSet rs = query(query);
         String text = "";
@@ -904,6 +958,13 @@ public class SQLTMDataSource extends TMDataSource {
         return res;
     }
 
+    /** Rroduces a topic: modality: token:weight mapping
+     *
+     * @param query
+     * @param weight_threshold
+     * @return
+     * @throws SQLException
+     */
     public Map<Integer, Map<String, Double>> getDocumentTopicWeights(String query, double weight_threshold) throws SQLException {
         ResultSet rs = query(query);
         Map<Integer, Map<String, Double>>  res = new HashMap<>();
