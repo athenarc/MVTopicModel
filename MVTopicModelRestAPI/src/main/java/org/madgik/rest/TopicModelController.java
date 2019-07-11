@@ -72,7 +72,7 @@ public class TopicModelController {
         }
     }
 
-   @RequestMapping("/documentsPerTopic")
+   @RequestMapping("/topicdocuments")
    public String getDocumentsPerTopic(String expid, Double weight_threshold, Boolean refresh){
 
        if (expid == null || expid.isEmpty()) expid = "JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay";
@@ -136,7 +136,7 @@ public class TopicModelController {
         return "[]";
     }
 
-    @RequestMapping("/topics")
+    @RequestMapping("/topictokens")
     public String getTopicInformation(String expid, Double prob_threshold, String weight_type, Boolean refresh) {
 
         if (expid == null || expid.isEmpty()) expid = "JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay";
