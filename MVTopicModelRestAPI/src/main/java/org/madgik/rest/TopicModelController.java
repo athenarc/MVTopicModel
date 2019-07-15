@@ -3,9 +3,14 @@ package org.madgik.rest;
 import com.fasterxml.jackson.databind.annotation.JsonAppend;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
+import org.madgik.dtos.DocumentInfoRequest;
+import org.madgik.dtos.VisualizationDocumentDto;
 import org.madgik.io.SQLTMDataSource;
 import org.madgik.model.LightDocument;
+import org.madgik.services.VisualizationDocumentService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -19,7 +24,10 @@ import java.sql.SQLException;
 import java.util.*;
 @RestController
 public class TopicModelController {
-    Logger logger = Logger.getLogger("REST");
+    private static final Logger logger = Logger.getLogger("REST");
+
+    @Autowired
+    private VisualizationDocumentService visualizationDocumentService;
 
     @Value("${serialization.path}")
     private String serializationBasePath;
@@ -106,34 +114,25 @@ public class TopicModelController {
    }
 
 
-    @RequestMapping(value="/documentinfo", method=RequestMethod.POST, consumes = MediaType.APPLICATION_JSON_VALUE)
-    public String getDocumentInformation(@RequestBody ArrayList<String> document_ids, Integer numChars) {
+    @RequestMapping(value="/documentinfo", method=RequestMethod.POST, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public List<VisualizationDocumentDto> getDocumentInformation(@RequestBody DocumentInfoRequest request) {
+        if(request.getNumChars() == null) request.setNumChars(100);
+        List<VisualizationDocumentDto> visualizationDocumentDtos =visualizationDocumentService.getVisualizationDocumentsInIds(request.getDocumentIds(), request.getOffset(), request.getLimit());
+        visualizationDocumentDtos.forEach(doc -> {
+            if (StringUtils.isNotBlank(doc.getAbstractField())) {
+                doc.setAbstractField(doc.getAbstractField().substring(request.getNumChars()));
+            }
 
-        if (document_ids.isEmpty()) return "[]";
-        if(numChars == null) numChars=100;
+            if (StringUtils.isNotBlank(doc.getAbstractPmc())) {
+                doc.setAbstractPmc(doc.getAbstractPmc().substring(request.getNumChars()));
+            }
 
-        Gson gson = new Gson();
-
-        //List<String> document_ids = gson.fromJson(new StringReader(docids_str), List.class);
-        List<LightDocument> documents = new ArrayList<>();
-        SQLTMDataSource ds = new SQLTMDataSource(sqlConnectionString);
-        try {
-
-            StringJoiner joiner = new StringJoiner(", ");
-            for(String docid: document_ids) joiner.add("'" + docid + "'");
-            String inclause = joiner.toString();
-            String base_query = new String(Files.readAllBytes(Paths.get(sqlDocumentVisualizationInfoQueryPath)));
-            String docQuery = base_query + " in (" + inclause + ")";
-            documents = ds.getDocumentVisualizationInformation(docQuery, numChars);
-
-            return gson.toJson(documents);
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return "[]";
+            if (StringUtils.isNotBlank(doc.getOtherAbstractPmc())) {
+                doc.setOtherAbstractPmc(doc.getAbstractPmc().substring(request.getNumChars()));
+            }
+        });
+        return visualizationDocumentDtos;
     }
 
     @RequestMapping("/topictokens")
@@ -195,6 +194,6 @@ public class TopicModelController {
         tmc.sqlTopicInfoQueryPath=p.getProperty("sql.topicinfo.querypath");
         tmc.getTopicInformation(null, null, "within_topic", true);
         tmc.getDocumentsPerTopic(null, null,null);
-        tmc.getDocumentInformation(ids,null);
+//        tmc.getDocumentInformation(ids,null, 0, 0);
     }
 }
