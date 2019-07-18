@@ -27,9 +27,11 @@ if [ ! -f "${tomcat_path}/bin/startup.sh" ]; then
 		&& mv "${unzipped}"/* ./ && rm -r "${unzipped}" ${zipped} \
 		&& cd "${cwd}"
 	echo "Done"
+	cp "/home/npittaras/.m2/repository/org/postgresql/postgresql/42.1.1.jre7/postgresql-42.1.1.jre7.jar" "${tomcat_path}/lib/"
 else
-	echo "Shutting down existing server..."
-	${tomcat_path}/bin/shutdown.sh
+	shut="${tomcat_path}/bin/shutdown.sh"
+	echo "Shutting down existing server via ${shut} ..."
+	bash "${shut}"
 fi
 
 # modify restful pom
@@ -46,4 +48,5 @@ cp MVTopicModelRestAPI/target/MVTopicModelRestAPI.war "${tomcat_path}/webapps/${
 echo "Starting tomcat. Logs @ $(ls -t ${tomcat_path}/logs | head -1)"
 "${tomcat_path}"/bin/startup.sh
 
-echo "Endpoint name: ${endpoint_name}. Try \"curl http://${ip_address}:8080/${endpoint_name}/hello\""
+echo "Endpoint name: ${endpoint_name}. Trying \"curl http://${ip_address}:8080/${endpoint_name}/hello\""
+curl "http://${ip_address}:8080/${endpoint_name}/hello"
