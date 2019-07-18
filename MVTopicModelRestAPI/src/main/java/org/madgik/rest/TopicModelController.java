@@ -162,9 +162,7 @@ public class TopicModelController {
             query = query.replaceAll("EXPERIMENT_IDENTIFIER", "'" + expid + "'");
             SQLTMDataSource ds = new SQLTMDataSource(sqlConnectionString);
             res = ds.getTopicInformation(query, prob_threshold, weight_type, expid);
-        } catch (IOException e) {
-            logger.error(e.getMessage());
-        } catch (SQLException e) {
+        } catch (IOException | SQLException e) {
             logger.error(e.getMessage());
         }
         output = new Gson().toJson(res);
