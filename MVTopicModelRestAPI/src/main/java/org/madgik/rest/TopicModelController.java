@@ -12,6 +12,7 @@ import org.madgik.model.LightDocument;
 import org.madgik.services.VisualizationDocumentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -116,9 +117,9 @@ public class TopicModelController {
 
     @RequestMapping(value="/documentinfo", method=RequestMethod.POST, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
-    public List<VisualizationDocumentDto> getDocumentInformation(@RequestBody DocumentInfoRequest request) {
+    public Page<VisualizationDocumentDto> getDocumentInformation(@RequestBody DocumentInfoRequest request) {
         if(request.getNumChars() == null) request.setNumChars(100);
-        List<VisualizationDocumentDto> visualizationDocumentDtos =visualizationDocumentService.getVisualizationDocumentsInIds(request.getDocumentIds(), request.getOffset(), request.getLimit());
+        Page<VisualizationDocumentDto> visualizationDocumentDtos =visualizationDocumentService.getVisualizationDocumentsInIds(request.getDocumentIds(), request.getOffset(), request.getLimit());
         visualizationDocumentDtos.forEach(doc -> {
             if (StringUtils.isNotBlank(doc.getAbstractField())) {
                 doc.setAbstractField(doc.getAbstractField().substring(request.getNumChars()));
