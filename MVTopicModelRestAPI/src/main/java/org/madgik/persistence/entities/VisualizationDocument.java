@@ -27,13 +27,17 @@ public class VisualizationDocument extends AbstractEntity {
     private String project;
     @Column(name = "journal")
     private String journal;
+    @Column(name = "doi_id")
+    private String doiId;
+    @Column(name = "pmc_id")
+    private String pmcId;
 
     public VisualizationDocument() {
 
     }
 
     public VisualizationDocument(String id, String pubyear, String abstractField, String abstractPmc, String otherAbstractPmc, String doctype, String projectAcronym,
-                                 String project, String journal) {
+                                 String project, String journal, String doiId, String pmcId) {
         this.id = id;
         this.pubyear = pubyear;
         this.abstractField = abstractField;
@@ -43,10 +47,12 @@ public class VisualizationDocument extends AbstractEntity {
         this.projectAcronym = projectAcronym;
         this.project = project;
         this.journal = journal;
+        this.doiId = doiId;
+        this.pmcId = pmcId;
     }
 
     public VisualizationDocument(String pubyear, String abstractField, String abstractPmc, String otherAbstractPmc, String doctype, String projectAcronym,
-                                 String project, String journal) {
+                                 String project, String journal, String doiId, String pmcId) {
         this.pubyear = pubyear;
         this.abstractField = abstractField;
         this.abstractPmc = abstractPmc;
@@ -55,6 +61,8 @@ public class VisualizationDocument extends AbstractEntity {
         this.projectAcronym = projectAcronym;
         this.project = project;
         this.journal = journal;
+        this.doiId = doiId;
+        this.pmcId = pmcId;
     }
 
     public String getPubyear() {
@@ -121,6 +129,22 @@ public class VisualizationDocument extends AbstractEntity {
         this.journal = journal;
     }
 
+    public String getDoiId() {
+        return doiId;
+    }
+
+    public void setDoiId(String doiId) {
+        this.doiId = doiId;
+    }
+
+    public String getPmcId() {
+        return pmcId;
+    }
+
+    public void setPmcId(String pmcId) {
+        this.pmcId = pmcId;
+    }
+
     @Override
     public String toString() {
         return "VisualizationDocument{" +
@@ -132,6 +156,8 @@ public class VisualizationDocument extends AbstractEntity {
                 ", projectAcronym='" + projectAcronym + '\'' +
                 ", project='" + project + '\'' +
                 ", journal='" + journal + '\'' +
+                ", doiId='" + doiId + '\'' +
+                ", pmcId='" + pmcId + '\'' +
                 ", id='" + id + '\'' +
                 '}';
     }
