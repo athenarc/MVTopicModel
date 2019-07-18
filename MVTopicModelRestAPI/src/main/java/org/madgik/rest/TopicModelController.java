@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
 import org.madgik.dtos.DocumentInfoRequest;
+import org.madgik.dtos.TopicClusteringDto;
 import org.madgik.dtos.VisualizationDocumentDto;
 import org.madgik.io.SQLTMDataSource;
 import org.madgik.model.LightDocument;
@@ -136,7 +137,7 @@ public class TopicModelController {
         return visualizationDocumentDtos;
     }
 
-    @RequestMapping("/topictokens")
+    @RequestMapping(value = "/topictokens", method = RequestMethod.GET)
     public String getTopicInformation(String expid, Double prob_threshold, String weight_type, Boolean refresh) {
 
         if (expid == null || expid.isEmpty()) expid = "JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay";
@@ -170,6 +171,15 @@ public class TopicModelController {
         // serialize
         serialize(serialization_path, output);
         return output;
+    }
+
+    @RequestMapping(value = "/topicclustering", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public TopicClusteringDto topicClustering(@RequestParam("clusterId") Integer clusterId) {
+        TopicClusteringDto dto = new TopicClusteringDto();
+        dto.setClusterId(clusterId);
+        dto.setClusterMember(1);
+        return dto;
     }
 
     public static void main(String[] args) {
