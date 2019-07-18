@@ -44,7 +44,6 @@
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <version>42.1.1.jre7</version>
-            <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>org.xerial</groupId>
