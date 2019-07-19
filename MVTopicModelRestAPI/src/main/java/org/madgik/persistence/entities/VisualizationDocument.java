@@ -31,6 +31,8 @@ public class VisualizationDocument extends AbstractEntity {
     private String doiId;
     @Column(name = "pmc_id")
     private String pmcId;
+    @Column(name = "salient_terms")
+    private String salientTerms;
 
     public VisualizationDocument() {
 
@@ -49,6 +51,7 @@ public class VisualizationDocument extends AbstractEntity {
         this.journal = journal;
         this.doiId = doiId;
         this.pmcId = pmcId;
+	this.salientTerms = "salient term1, salient term2";
     }
 
     public VisualizationDocument(String pubyear, String abstractField, String abstractPmc, String otherAbstractPmc, String doctype, String projectAcronym,
@@ -145,6 +148,14 @@ public class VisualizationDocument extends AbstractEntity {
         this.pmcId = pmcId;
     }
 
+    public String getSalientTerms() {
+        return this.salientTerms;
+    }
+
+    public void setSalientTerms(String salientTerms) {
+        this.salientTerms = salientTerms;
+    }
+
     @Override
     public String toString() {
         return "VisualizationDocument{" +
@@ -159,6 +170,7 @@ public class VisualizationDocument extends AbstractEntity {
                 ", doiId='" + doiId + '\'' +
                 ", pmcId='" + pmcId + '\'' +
                 ", id='" + id + '\'' +
+                ", salientTerms='" + salientTerms + '\'' +
                 '}';
     }
 }
