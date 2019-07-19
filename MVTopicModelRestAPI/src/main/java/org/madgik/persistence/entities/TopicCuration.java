@@ -1,37 +1,49 @@
-package org.madgik.dtos;
+package org.madgik.persistence.entities;
 
+import javax.persistence.*;
 import java.io.Serializable;
 import java.util.Objects;
 
-public class TopicCurationDto implements Serializable {
+@Entity
+@Table(name = "topic_curation")
+public class TopicCuration implements Serializable {
 
-    private TopicCurationIdDto topicCurationId;
-    private TopicDto topic;
+    @EmbeddedId
+    private TopicCurationId topicCurationId;
+
+    @OneToOne
+    @MapsId("topicId")
+    @JoinColumns({
+            @JoinColumn(name="topicid", referencedColumnName="id"),
+            @JoinColumn(name="experimentid", referencedColumnName="experimentid")
+    })
+    private Topic topic;
+    @Column(name = "curated_description")
     private String curatedDescription;
 
-    public TopicCurationDto() {
+    public TopicCuration() {
 
     }
 
-    public TopicCurationDto(TopicCurationIdDto topicCurationId, TopicDto topic, String curatedDescription) {
+    public TopicCuration(TopicCurationId topicCurationId, Topic topic, String curatedDescription) {
         this.topicCurationId = topicCurationId;
         this.topic = topic;
-        this.curatedDescription= curatedDescription;
+        this.curatedDescription = curatedDescription;
     }
 
-    public TopicCurationIdDto getTopicCurationId() {
+    public TopicCurationId getTopicCurationId() {
         return topicCurationId;
     }
 
-    public void setTopicCurationId(TopicCurationIdDto topicCurationId) {
+    public void setTopicCurationId(TopicCurationId topicCurationId) {
         this.topicCurationId = topicCurationId;
     }
 
-    public TopicDto getTopic() {
+    public Topic getTopic() {
         return topic;
     }
 
-    public void setTopic(TopicDto topic) {
+    public void setTopic(Topic topic) {
         this.topic = topic;
     }
 
@@ -47,7 +59,7 @@ public class TopicCurationDto implements Serializable {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        TopicCurationDto that = (TopicCurationDto) o;
+        TopicCuration that = (TopicCuration) o;
         return topicCurationId.equals(that.topicCurationId);
     }
 
@@ -58,7 +70,7 @@ public class TopicCurationDto implements Serializable {
 
     @Override
     public String toString() {
-        return "TopicCurationDto{" +
+        return "TopicCuration{" +
                 "topicCurationId=" + topicCurationId +
                 ", topic=" + topic +
                 ", curatedDescription=" + curatedDescription +

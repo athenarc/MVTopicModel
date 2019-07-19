@@ -23,5 +23,7 @@ public class Constants {
     public static final String MODEL_MAPPER = "modelMapper";
     public static final String MAPPER_SERVICE = "mapperService";
     public static final String VISUALIZATION_DOCUMENT_SERVICE = "visualizationDocumentService";
+    public static final String TOPIC_CURATION_SERVICE = "topicCurationService";
+    public static final String TOPIC_SERVICE = "topicService";
 
 }
