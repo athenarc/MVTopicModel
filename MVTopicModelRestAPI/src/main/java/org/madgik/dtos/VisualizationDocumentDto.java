@@ -10,13 +10,16 @@ public class VisualizationDocumentDto extends AbstractDto {
     private String projectAcronym;
     private String project;
     private String journal;
+    private String doiId;
+    private String pmcId;
+    private String salientTerms;
 
     public VisualizationDocumentDto() {
 
     }
 
     public VisualizationDocumentDto(String id, String pubyear, String abstractField, String abstractPmc, String otherAbstractPmc, String doctype, String projectAcronym,
-                                    String project, String journal) {
+                                    String project, String journal, String doiId, String pmcId, String salientTerms) {
         this.id = id;
         this.pubyear = pubyear;
         this.abstractField = abstractField;
@@ -26,10 +29,13 @@ public class VisualizationDocumentDto extends AbstractDto {
         this.projectAcronym = projectAcronym;
         this.project = project;
         this.journal = journal;
+        this.doiId = doiId;
+        this.pmcId = pmcId;
+        this.salientTerms = salientTerms;
     }
 
     public VisualizationDocumentDto(String pubyear, String abstractField, String abstractPmc, String otherAbstractPmc, String doctype, String projectAcronym,
-                                    String project, String journal) {
+                                    String project, String journal, String doiId, String pmcId, String salientTerms) {
         this.pubyear = pubyear;
         this.abstractField = abstractField;
         this.abstractPmc = abstractPmc;
@@ -38,6 +44,9 @@ public class VisualizationDocumentDto extends AbstractDto {
         this.projectAcronym = projectAcronym;
         this.project = project;
         this.journal = journal;
+        this.doiId = doiId;
+        this.pmcId = pmcId;
+        this.salientTerms = salientTerms;
     }
 
     public String getPubyear() {
@@ -104,6 +113,30 @@ public class VisualizationDocumentDto extends AbstractDto {
         this.journal = journal;
     }
 
+    public String getDoiId() {
+        return doiId;
+    }
+
+    public void setDoiId(String doiId) {
+        this.doiId = doiId;
+    }
+
+    public String getPmcId() {
+        return pmcId;
+    }
+
+    public void setPmcId(String pmcId) {
+        this.pmcId = pmcId;
+    }
+
+    public String getSalientTerms() {
+        return salientTerms;
+    }
+
+    public void setSalientTerms(String salientTerms) {
+        this.salientTerms = salientTerms;
+    }
+
     @Override
     public String toString() {
         return "VisualizationDocumentDto{" +
@@ -115,6 +148,9 @@ public class VisualizationDocumentDto extends AbstractDto {
                 ", projectAcronym='" + projectAcronym + '\'' +
                 ", project='" + project + '\'' +
                 ", journal='" + journal + '\'' +
+                ", doiId='" + doiId + '\'' +
+                ", pmcId='" + pmcId + '\'' +
+                ", salientTerms='" + salientTerms + '\'' +
                 ", id='" + id + '\'' +
                 '}';
     }
