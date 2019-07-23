@@ -1,17 +1,16 @@
 package org.madgik.rest;
 
-import com.fasterxml.jackson.databind.annotation.JsonAppend;
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
-import org.madgik.dtos.DocumentInfoRequest;
-import org.madgik.dtos.VisualizationDocumentDto;
+import org.madgik.dtos.*;
 import org.madgik.io.SQLTMDataSource;
-import org.madgik.model.LightDocument;
+import org.madgik.services.TopicCurationService;
+import org.madgik.services.TopicService;
 import org.madgik.services.VisualizationDocumentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -22,12 +21,19 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.SQLException;
 import java.util.*;
+
 @RestController
 public class TopicModelController {
     private static final Logger logger = Logger.getLogger("REST");
 
     @Autowired
     private VisualizationDocumentService visualizationDocumentService;
+
+    @Autowired
+    private TopicCurationService topicCurationService;
+
+    @Autowired
+    private TopicService topicService;
 
     @Value("${serialization.path}")
     private String serializationBasePath;
@@ -116,9 +122,9 @@ public class TopicModelController {
 
     @RequestMapping(value="/documentinfo", method=RequestMethod.POST, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
-    public List<VisualizationDocumentDto> getDocumentInformation(@RequestBody DocumentInfoRequest request) {
+    public Page<VisualizationDocumentDto> getDocumentInformation(@RequestBody DocumentInfoRequest request) {
         if(request.getNumChars() == null) request.setNumChars(100);
-        List<VisualizationDocumentDto> visualizationDocumentDtos =visualizationDocumentService.getVisualizationDocumentsInIds(request.getDocumentIds(), request.getOffset(), request.getLimit());
+        Page<VisualizationDocumentDto> visualizationDocumentDtos =visualizationDocumentService.getVisualizationDocumentsInIds(request.getDocumentIds(), request.getOffset(), request.getLimit());
         visualizationDocumentDtos.forEach(doc -> {
             if (StringUtils.isNotBlank(doc.getAbstractField())) {
                 doc.setAbstractField(doc.getAbstractField().substring(request.getNumChars()));
@@ -135,7 +141,7 @@ public class TopicModelController {
         return visualizationDocumentDtos;
     }
 
-    @RequestMapping("/topictokens")
+    @RequestMapping(value = "/topictokens", method = RequestMethod.GET)
     public String getTopicInformation(String expid, Double prob_threshold, String weight_type, Boolean refresh) {
 
         if (expid == null || expid.isEmpty()) expid = "JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay";
@@ -160,9 +166,7 @@ public class TopicModelController {
             query = query.replaceAll("EXPERIMENT_IDENTIFIER", "'" + expid + "'");
             SQLTMDataSource ds = new SQLTMDataSource(sqlConnectionString);
             res = ds.getTopicInformation(query, prob_threshold, weight_type, expid);
-        } catch (IOException e) {
-            logger.error(e.getMessage());
-        } catch (SQLException e) {
+        } catch (IOException | SQLException e) {
             logger.error(e.getMessage());
         }
         output = new Gson().toJson(res);
@@ -171,8 +175,39 @@ public class TopicModelController {
         return output;
     }
 
+    @RequestMapping(value = "/topicclustering", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public TopicClusteringDto topicClustering(@RequestParam("clusterId") Integer clusterId) {
+        TopicClusteringDto dto = new TopicClusteringDto();
+        dto.setClusterId(clusterId);
+        dto.setClusterMember(1);
+        return dto;
+    }
+
+    @RequestMapping(value = "/topiccuration", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public TopicCurationDto getTopicCurationByCompositeId(@RequestParam("topicId") Integer topicId, @RequestParam("experimentId") String experimentId) {
+        return topicCurationService.getTopicCurationByTopicIdAndExperimentId(topicId, experimentId);
+    }
+
+    @RequestMapping(value = "/topiccuration", method = RequestMethod.POST, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public TopicCurationDto createTopicCuration(@RequestBody TopicCurationRequest topicCurationRequest) {
+        TopicIdDto topicIdDto = new TopicIdDto(topicCurationRequest.getTopicId(), topicCurationRequest.getExperimentId());
+        TopicCurationIdDto topicCurationIdDto = new TopicCurationIdDto(topicIdDto);
+        TopicDto topicDto = topicService.getTopicByCompositeId(topicCurationRequest.getTopicId(), topicCurationRequest.getExperimentId());
+        if (topicDto != null) {
+            TopicCurationDto topicCurationDto = new TopicCurationDto();
+            topicCurationDto.setTopic(topicDto);
+            topicCurationDto.setTopicCurationId(topicCurationIdDto);
+            topicCurationDto.setCuratedDescription(topicCurationRequest.getCuratedDescription());
+            return topicCurationService.createTopicCuration(topicCurationDto);
+        }
+        return null;
+    }
+
     public static void main(String[] args) {
-        ArrayList<String> ids = new ArrayList<>();
+        List<String> ids = new ArrayList<>();
         ids.add("50|acnbad______::48b13e3bf556d6e858bed820143ef25d");
         ids.add("50|acnbad______::71d981639718b3130ffdf8b29d18792e");
         ids.add("50|base_oa_____::007cdd1252e5f998b25f25c8b6d4453f");

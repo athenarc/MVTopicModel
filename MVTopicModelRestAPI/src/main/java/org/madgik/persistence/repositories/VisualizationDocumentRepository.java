@@ -1,6 +1,7 @@
 package org.madgik.persistence.repositories;
 
 import org.madgik.persistence.entities.VisualizationDocument;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -13,5 +14,5 @@ import java.util.List;
 public interface VisualizationDocumentRepository extends JpaRepository<VisualizationDocument, String> {
 
     @Query("select v from VisualizationDocument v where v.id in :ids")
-    List<VisualizationDocument> findAllByIdIn(@Param("ids") List<String> ids, Pageable pageable);
+    Page<VisualizationDocument> findAllByIdIn(@Param("ids") List<String> ids, Pageable pageable);
 }
