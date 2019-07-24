@@ -11,7 +11,7 @@ batchid,
   repository 
   from doc_topic
 Inner Join Document on Document.id=Doc_Topic.DocId 
-where ExperimentId = 'PubMed_500T_550IT_7000CHRs_4M_OneWay'
+where ExperimentId = 'JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay'
 and weight > 0.6	
 --And topicId=0 
 Order by TopicId, Weight desc;
@@ -71,7 +71,7 @@ SELECT TopicDescription.TopicId AS TopicId,
                       TopicAnalysis.ExperimentId
                  FROM TopicAnalysis
                       INNER JOIN
-                      Experiment ON TopicAnalysis.ExperimentId = Experiment.ExperimentId AND Experiment.ExperimentId =  'PubMed_500T_550IT_7000CHRs_4M_OneWay'
+                      Experiment ON TopicAnalysis.ExperimentId = Experiment.ExperimentId AND Experiment.ExperimentId =  'JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay'
                       INNER JOIN
                       (
                           SELECT ExperimentId,
@@ -124,7 +124,7 @@ SELECT TopicDescription.TopicId AS TopicId,
 		 								--and visibilityindex=4
                                               --inner join embopmcid on 
                                           --    INNER JOIN  embopmcid ON PubTopic.PubId = embopmcid.pmcid AND PubTopic.weight > 0.1
-                                              and  doc_topic.ExperimentId='PubMed_500T_550IT_7000CHRs_4M_OneWay' 
+                                              and  doc_topic.ExperimentId='JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay' 
                                             
                                                    INNER JOIN (SELECT  sum(weight) AS ProjectSumWeight,    ExperimentId
                                                    FROM doc_topic
@@ -203,7 +203,7 @@ SELECT TopicDescription.TopicId AS TopicId,
                       TopicAnalysis.ExperimentId
                  FROM TopicAnalysis
                       INNER JOIN
-                      Experiment ON TopicAnalysis.ExperimentId = Experiment.ExperimentId AND Experiment.ExperimentId =  'PubMed_500T_550IT_7000CHRs_4M_OneWay'
+                      Experiment ON TopicAnalysis.ExperimentId = Experiment.ExperimentId AND Experiment.ExperimentId =  'JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay'
                       INNER JOIN
                       (
                           SELECT ExperimentId,
