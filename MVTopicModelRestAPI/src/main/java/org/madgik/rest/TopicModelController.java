@@ -203,13 +203,12 @@ public class TopicModelController {
     @RequestMapping(value = "/topiccuration", method = RequestMethod.POST, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public TopicCurationDto createTopicCuration(@RequestBody TopicCurationRequest topicCurationRequest) {
-        TopicIdDto topicIdDto = new TopicIdDto(topicCurationRequest.getTopicId(), topicCurationRequest.getExperimentId());
-        TopicCurationIdDto topicCurationIdDto = new TopicCurationIdDto(topicIdDto);
         TopicDto topicDto = topicService.getTopicByCompositeId(topicCurationRequest.getTopicId(), topicCurationRequest.getExperimentId());
         if (topicDto != null) {
             TopicCurationDto topicCurationDto = new TopicCurationDto();
             topicCurationDto.setTopic(topicDto);
-            topicCurationDto.setTopicCurationId(topicCurationIdDto);
+            topicCurationDto.setTopicId(topicCurationRequest.getTopicId());
+            topicCurationDto.setExperimentId(topicCurationRequest.getExperimentId());
             topicCurationDto.setCuratedDescription(topicCurationRequest.getCuratedDescription());
             return topicCurationService.createTopicCuration(topicCurationDto);
         }
