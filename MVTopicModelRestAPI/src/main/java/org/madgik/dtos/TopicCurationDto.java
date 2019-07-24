@@ -2,10 +2,12 @@ package org.madgik.dtos;
 
 import java.io.Serializable;
 import java.util.Objects;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 public class TopicCurationDto implements Serializable {
 
     private TopicCurationIdDto topicCurationId;
+    @JsonIgnore
     private TopicDto topic;
     private String curatedDescription;
 
