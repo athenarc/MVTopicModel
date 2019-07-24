@@ -184,10 +184,20 @@ public class TopicModelController {
         return dto;
     }
 
+
+    @GetMapping(value = "/topicCurations", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public List<TopicCurationDto> getTopicsCuration(@RequestParam String experimentId) {
+
+        return topicCurationService.getAllTopicCurations();
+    }
+
     @RequestMapping(value = "/topiccuration", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public TopicCurationDto getTopicCurationByCompositeId(@RequestParam("topicId") Integer topicId, @RequestParam("experimentId") String experimentId) {
-        return topicCurationService.getTopicCurationByTopicIdAndExperimentId(topicId, experimentId);
+        TopicCurationDto res = topicCurationService.getTopicCurationByTopicIdAndExperimentId(topicId, experimentId);
+        if (res == null) return new TopicCurationDto();
+        return res;
     }
 
     @RequestMapping(value = "/topiccuration", method = RequestMethod.POST, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -203,7 +213,7 @@ public class TopicModelController {
             topicCurationDto.setCuratedDescription(topicCurationRequest.getCuratedDescription());
             return topicCurationService.createTopicCuration(topicCurationDto);
         }
-        return null;
+        return new TopicCurationDto();
     }
 
     public static void main(String[] args) {
