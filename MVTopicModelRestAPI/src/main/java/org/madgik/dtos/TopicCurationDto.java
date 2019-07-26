@@ -1,11 +1,15 @@
 package org.madgik.dtos;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import java.io.Serializable;
 import java.util.Objects;
 
 public class TopicCurationDto implements Serializable {
 
-    private TopicCurationIdDto topicCurationId;
+    private Integer topicId;
+    private String experimentId;
+    @JsonIgnore
     private TopicDto topic;
     private String curatedDescription;
 
@@ -13,18 +17,28 @@ public class TopicCurationDto implements Serializable {
 
     }
 
-    public TopicCurationDto(TopicCurationIdDto topicCurationId, TopicDto topic, String curatedDescription) {
-        this.topicCurationId = topicCurationId;
+    public TopicCurationDto(Integer topicId, String experimentId, TopicDto topic,
+                            String curatedDescription) {
+        this.topicId = topicId;
+        this.experimentId = experimentId;
         this.topic = topic;
-        this.curatedDescription= curatedDescription;
+        this.curatedDescription = curatedDescription;
     }
 
-    public TopicCurationIdDto getTopicCurationId() {
-        return topicCurationId;
+    public Integer getTopicId() {
+        return topicId;
     }
 
-    public void setTopicCurationId(TopicCurationIdDto topicCurationId) {
-        this.topicCurationId = topicCurationId;
+    public void setTopicId(Integer topicId) {
+        this.topicId = topicId;
+    }
+
+    public String getExperimentId() {
+        return experimentId;
+    }
+
+    public void setExperimentId(String experimentId) {
+        this.experimentId = experimentId;
     }
 
     public TopicDto getTopic() {
@@ -48,20 +62,22 @@ public class TopicCurationDto implements Serializable {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         TopicCurationDto that = (TopicCurationDto) o;
-        return topicCurationId.equals(that.topicCurationId);
+        return topicId.equals(that.topicId) &&
+                experimentId.equals(that.experimentId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(topicCurationId);
+        return Objects.hash(topicId, experimentId);
     }
 
     @Override
     public String toString() {
         return "TopicCurationDto{" +
-                "topicCurationId=" + topicCurationId +
+                "topicId=" + topicId +
+                ", experimentId='" + experimentId + '\'' +
                 ", topic=" + topic +
-                ", curatedDescription=" + curatedDescription +
+                ", curatedDescription='" + curatedDescription + '\'' +
                 '}';
     }
 }

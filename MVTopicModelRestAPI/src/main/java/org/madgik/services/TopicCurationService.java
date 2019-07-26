@@ -8,6 +8,7 @@ import org.madgik.persistence.repositories.TopicCurationRepository;
 import org.madgik.utils.Constants;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import java.util.List;
 
 import java.util.Optional;
 
@@ -26,7 +27,7 @@ public class TopicCurationService {
     public TopicCurationDto createTopicCuration(TopicCurationDto topicCurationDto) {
         if (topicCurationDto.getTopic() == null) return null;
         topicService.createNewTopic(topicCurationDto.getTopic());
-        return mapperService.getDto(repo.save(mapperService.getEntity(topicCurationDto, TopicCuration.class)), TopicCurationDto.class);
+        return mapperService.convertTopicCurationEntityToDto(repo.save(mapperService.convertTopicCurationDtoToEntity(topicCurationDto)));
     }
 
     public TopicCurationDto getTopicCurationByTopicIdAndExperimentId(Integer topicId, String experimentId) {
@@ -35,8 +36,12 @@ public class TopicCurationService {
         Optional<TopicCuration> topicCurationOptional = repo.findById(topicCurationId);
         if (topicCurationOptional.isPresent()) {
             TopicCuration topicCuration = topicCurationOptional.get();
-            return mapperService.getDto(topicCuration, TopicCurationDto.class);
+            return mapperService.convertTopicCurationEntityToDto(topicCuration);
         }
         return null;
     }
+    public List<TopicCurationDto> getAllTopicCurations(){
+	    return mapperService.convertTopicCurationEntityListToDto(repo.findAll());
+    }
+
 }
