@@ -7,7 +7,7 @@ VisibilityIndex,
 round(TopicDetails.Weight,6) as TopicWeight ,
 TopicDetails.TotalTokens,
 round(discrWeightFlat,5) as DiscrWeightFlat,
-round(discrWeight,5) as DiscrWeight,
+round(discrWeight.discrWeight,5) as DiscrWeight,
 round(normDiscrWeight,5) as normDiscrWeight, --discrWeightDivLogDiffW
 round(coh1.Score,2) as Coherence
 ,round(topicDiscr.TopicDiscrWeight,6) as TopicExclusivityOnPubs
@@ -15,7 +15,7 @@ round(coh1.Score,2) as Coherence
 ,topic.ExperimentId
 
 from TopicDetails
-INNER Join  Topic on TopicDetails.TopicId = topic.Id and TopicDetails.ExperimentId=topic.ExperimentId and ItemType=0
+INNER Join  Topic on TopicDetails.TopicId = topic.Id and TopicDetails.ExperimentId=topic.ExperimentId and TopicDetails.ItemType=0
 INNER Join 
 (select EntityId, Score,ExperimentId from ExpDiagnostics
 where entityType=1
@@ -58,7 +58,8 @@ SELECT
       FROM doc_topic
            INNER JOIN (select doc_topic.TopicId, experimentId,  
            sum(weight) AS TopicSumWeight from doc_topic 
-           where doc_topic.ExperimentId='ACM_300T_550IT_4000CHRs_3M_WVOneWay' 
+           -- where doc_topic.ExperimentId='JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay' 
+           where doc_topic.ExperimentId='PubMed_400T_100IT_7000CHRs_4M_Lmt_10000OneWay' 
            Group By ExperimentId, TopicID) as TopicSum 
            On TopicSum.TopicId = doc_topic.TopicId and TopicSum.ExperimentId = doc_topic.ExperimentId
            -- where doc_topic.ExperimentId='ACM_200T_500IT_5000CHRs_100B_5M_cos'
@@ -75,7 +76,8 @@ SELECT
 
   ) topicDiscr on topicDiscr.TopicId = TopicDetails.TopicId and TopicDetails.ExperimentId=topicDiscr.ExperimentId 
   
-where coh1.ExperimentId='ACM_300T_550IT_4000CHRs_3M_WVOneWay'  
+-- where coh1.ExperimentId='JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay'  
+where coh1.ExperimentId='PubMed_400T_100IT_7000CHRs_4M_Lmt_10000OneWay'  
 --and round(coh1.Score,2)<-150
 order by TopicDetails.TopicId
 ) as c
