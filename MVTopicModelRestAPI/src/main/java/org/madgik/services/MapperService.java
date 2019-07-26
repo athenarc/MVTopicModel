@@ -1,6 +1,12 @@
 package org.madgik.services;
 
 import org.apache.commons.collections4.CollectionUtils;
+import org.madgik.dtos.TopicCurationDto;
+import org.madgik.dtos.TopicDto;
+import org.madgik.persistence.entities.Topic;
+import org.madgik.persistence.entities.TopicCuration;
+import org.madgik.persistence.entities.TopicCurationId;
+import org.madgik.persistence.entities.TopicId;
 import org.madgik.utils.Constants;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,6 +52,54 @@ public class MapperService {
     private <T,S> T getMappedObject(S initialObject, Class<T> mappingClass) {
         if(initialObject == null) return null;
         return modelMapper.map(initialObject, mappingClass);
+    }
+
+    public TopicCurationDto convertTopicCurationEntityToDto(TopicCuration topicCuration) {
+        if (topicCuration == null) return null;
+        TopicCurationDto topicCurationDto = new TopicCurationDto();
+        if (topicCuration.getTopicCurationId() != null &&
+                topicCuration.getTopicCurationId().getTopicId() != null) {
+            topicCurationDto.setTopicId(topicCuration.getTopicCurationId().getTopicId().getId());
+            topicCurationDto.setExperimentId(topicCuration.getTopicCurationId().getTopicId().getExperimentId());
+        }
+        topicCurationDto.setTopic(getDto(topicCuration.getTopic(), TopicDto.class));
+        topicCurationDto.setCuratedDescription(topicCuration.getCuratedDescription());
+        return topicCurationDto;
+    }
+
+    public TopicCuration convertTopicCurationDtoToEntity(TopicCurationDto topicCurationDto) {
+        if (topicCurationDto == null) return null;
+        TopicCuration topicCuration = new TopicCuration();
+        TopicId topicId = new TopicId();
+        TopicCurationId topicCurationId=new TopicCurationId();
+        topicId.setId(topicCurationDto.getTopicId());
+        topicId.setExperimentId(topicCurationDto.getExperimentId());
+        topicCurationId.setTopicId(topicId);
+        topicCuration.setTopicCurationId(topicCurationId);
+        topicCuration.setTopic(getEntity(topicCurationDto.getTopic(), Topic.class));
+        return topicCuration;
+    }
+
+    public List<TopicCurationDto> convertTopicCurationEntityListToDto(List<TopicCuration> topicCurations) {
+        if (CollectionUtils.isEmpty(topicCurations)) return null;
+        List<TopicCurationDto> topicCurationDtos = new ArrayList<>();
+        topicCurations.forEach(topicCuration -> {
+            if (topicCuration != null) {
+                topicCurationDtos.add(convertTopicCurationEntityToDto(topicCuration));
+            }
+        });
+        return topicCurationDtos;
+    }
+
+    public List<TopicCuration> convertTopicCurationDtoListToEntity(List<TopicCurationDto> topicCurationDtos) {
+        if (CollectionUtils.isEmpty(topicCurationDtos)) return null;
+        List<TopicCuration> topicCurations = new ArrayList<>();
+        topicCurationDtos.forEach(topicCurationDto -> {
+            if (topicCurationDto != null) {
+                topicCurations.add(convertTopicCurationDtoToEntity(topicCurationDto));
+            }
+        });
+        return topicCurations;
     }
 
 }
