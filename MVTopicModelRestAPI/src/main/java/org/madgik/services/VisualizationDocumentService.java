@@ -24,8 +24,7 @@ public class VisualizationDocumentService {
     public Page<VisualizationDocumentDto> getVisualizationDocumentsInIds(List<String> ids, int offset, int limit) {
         Pageable pageable = PageRequest.of(offset, limit);
         Page<VisualizationDocument> documentPages = repo.findAllByIdIn(ids, pageable);
-        Page<VisualizationDocumentDto> dtoPage = documentPages.map(entity ->
+        return documentPages.map(entity ->
                 mapperService.getDto(entity, VisualizationDocumentDto.class));
-        return dtoPage;
     }
 }
