@@ -40,13 +40,14 @@ echo "Assumes property paths are set"
 
 # build and copy the war
 echo "Building"
-mvn clean package -P local
+mvn clean package -D skipTests=True
 echo "Registering tomcat war as ${endpoint_name}"
 cp MVTopicModelRestAPI/target/MVTopicModelRestAPI.war "${tomcat_path}/webapps/${endpoint_name}.war"
 
 # tomcat
 echo "Starting tomcat. Logs @ $(ls -t ${tomcat_path}/logs | head -1)"
 "${tomcat_path}"/bin/startup.sh
+sleep 3
 
 echo "Endpoint name: ${endpoint_name}. Trying \"curl http://${ip_address}:8080/${endpoint_name}/hello\""
 curl "http://${ip_address}:8080/${endpoint_name}/hello"
