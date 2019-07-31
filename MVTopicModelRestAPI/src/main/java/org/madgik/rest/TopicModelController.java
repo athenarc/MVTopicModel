@@ -8,6 +8,7 @@ import org.madgik.io.SQLTMDataSource;
 import org.madgik.services.TopicCurationService;
 import org.madgik.services.TopicService;
 import org.madgik.services.VisualizationDocumentService;
+import org.madgik.services.VisualizationExperimentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -34,6 +35,9 @@ public class TopicModelController {
 
     @Autowired
     private TopicService topicService;
+
+    @Autowired
+    private VisualizationExperimentService visualizationExperimentService;
 
     @Value("${serialization.path}")
     private String serializationBasePath;
@@ -65,8 +69,6 @@ public class TopicModelController {
                // get cached results
                try {
                    return new String(Files.readAllBytes(Paths.get(path)));
-               } catch (FileNotFoundException e) {
-                   logger.error(e.getMessage());
                } catch (IOException e) {
                    logger.error(e.getMessage());
                }
@@ -187,9 +189,10 @@ public class TopicModelController {
 
     @GetMapping(value = "/topicCurations", produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
-    public List<TopicCurationDto> getTopicsCuration(@RequestParam String experimentId) {
-
-        return topicCurationService.getAllTopicCurations();
+    public Page<TopicCurationDto> getTopicsCuration(@RequestParam String experimentId,
+                                                    @RequestParam("offset") int offset,
+                                                    @RequestParam("limit") Integer limit) {
+        return topicCurationService.getAllTopicCurations(offset, limit);
     }
 
     @RequestMapping(value = "/topiccuration", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -213,6 +216,12 @@ public class TopicModelController {
             return topicCurationService.createTopicCuration(topicCurationDto);
         }
         return new TopicCurationDto();
+    }
+
+    @RequestMapping(value = "/experiment", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Page<VisualizationExperimentDto> getAllVisualizationExperiments(Integer offset, Integer limit) {
+        return visualizationExperimentService.getAllVisualizationExperiments(offset, limit);
     }
 
     public static void main(String[] args) {

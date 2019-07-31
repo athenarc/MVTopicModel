@@ -25,5 +25,5 @@ public class Constants {
     public static final String VISUALIZATION_DOCUMENT_SERVICE = "visualizationDocumentService";
     public static final String TOPIC_CURATION_SERVICE = "topicCurationService";
     public static final String TOPIC_SERVICE = "topicService";
-
+    public static final String VISUALIZATION_EXPERIMENT_SERVICE = "visualizationExperimentService";
 }

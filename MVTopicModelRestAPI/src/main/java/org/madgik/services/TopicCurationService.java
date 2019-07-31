@@ -7,6 +7,9 @@ import org.madgik.persistence.entities.TopicId;
 import org.madgik.persistence.repositories.TopicCurationRepository;
 import org.madgik.utils.Constants;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import java.util.List;
 
@@ -40,8 +43,12 @@ public class TopicCurationService {
         }
         return null;
     }
-    public List<TopicCurationDto> getAllTopicCurations(){
-	    return mapperService.convertTopicCurationEntityListToDto(repo.findAll());
+    public Page<TopicCurationDto> getAllTopicCurations(Integer offset, Integer limit){
+        Pageable pageable = PageRequest.of(offset, limit);
+        Page<TopicCuration> topicCurationPage = repo.findAll(pageable);
+        Page<TopicCurationDto> topicCurationDtoPage = topicCurationPage.map(entity ->
+                mapperService.convertTopicCurationEntityToDto(entity));
+	    return topicCurationDtoPage;
     }
 
 }
