@@ -77,6 +77,7 @@ public class MapperService {
         topicCurationId.setTopicId(topicId);
         topicCuration.setTopicCurationId(topicCurationId);
         topicCuration.setTopic(getEntity(topicCurationDto.getTopic(), Topic.class));
+        topicCuration.setCuratedDescription(topicCurationDto.getCuratedDescription());
         return topicCuration;
     }
 
