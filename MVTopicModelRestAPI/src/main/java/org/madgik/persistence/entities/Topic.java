@@ -1,15 +1,17 @@
 package org.madgik.persistence.entities;
 
-import javax.persistence.Column;
-import javax.persistence.EmbeddedId;
-import javax.persistence.Entity;
-import javax.persistence.Table;
+import org.hibernate.annotations.DynamicUpdate;
+
+import javax.persistence.*;
 import javax.validation.constraints.Size;
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 @Entity
 @Table(name = "topic")
+@DynamicUpdate
 public class Topic implements Serializable {
 
     @EmbeddedId
@@ -59,6 +61,9 @@ public class Topic implements Serializable {
     private Integer weightedCounts;
     @Column(name = "rk")
     private Integer rk;
+
+//    @ManyToMany(mappedBy = "topic", cascade=CascadeType.ALL)
+//    private List<DocTopic> docTopicList = new ArrayList<>();
 
     public Topic() {
 
@@ -251,6 +256,14 @@ public class Topic implements Serializable {
     public void setRk(Integer rk) {
         this.rk = rk;
     }
+
+//    public List<DocTopic> getDocTopicList() {
+//        return docTopicList;
+//    }
+
+//    public void setDocTopicList(List<DocTopic> docTopicList) {
+//        this.docTopicList = docTopicList;
+//    }
 
     @Override
     public boolean equals(Object o) {

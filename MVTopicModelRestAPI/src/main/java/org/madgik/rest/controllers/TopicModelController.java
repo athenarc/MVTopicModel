@@ -5,13 +5,10 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
 import org.madgik.dtos.*;
 import org.madgik.io.SQLTMDataSource;
-import org.madgik.rest.requests.PageableRequest;
 import org.madgik.rest.requests.DocumentInfoRequest;
+import org.madgik.rest.requests.PageableRequest;
 import org.madgik.rest.requests.TopicCurationRequest;
-import org.madgik.services.TopicCurationService;
-import org.madgik.services.TopicService;
-import org.madgik.services.VisualizationDocumentService;
-import org.madgik.services.VisualizationExperimentService;
+import org.madgik.services.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -19,11 +16,16 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import java.io.*;
+
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.SQLException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 public class TopicModelController {
@@ -41,6 +43,9 @@ public class TopicModelController {
 
     @Autowired
     private VisualizationExperimentService visualizationExperimentService;
+
+    @Autowired
+    private DocTopicService docTopicService;
 
     @Value("${serialization.path}")
     private String serializationBasePath;
@@ -94,11 +99,19 @@ public class TopicModelController {
         }
     }
 
-   @RequestMapping("/topicDocuments")
-   public String getDocumentsPerTopic(String experimentId, Integer topicId){
-
+   @RequestMapping(value = "/topicDocuments", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+   @ResponseBody
+   public Page<VisualizationDocumentDto> getDocumentsPerTopic(@RequestParam("filter") String filter,
+                                                 @RequestParam("sortOrder") String sortOrder,
+                                                 @RequestParam("pageNumber") Integer pageNumber,
+                                                 @RequestParam("pageSize") Integer pageSize,
+                                                 @RequestParam("topicId") Integer topicId,
+                                                 @RequestParam("experimentId") String experimentId){
        if (experimentId == null || experimentId.isEmpty()) experimentId = "JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay";
-
+       List<DocTopicDto> docTopicDtos = docTopicService.getDocTopicsByTopicIdAndExperimentId(topicId, experimentId);
+       List<String> docIds = docTopicDtos.stream().map(DocTopicDto::getDocId).collect(Collectors.toList());
+       DocumentInfoRequest request = new DocumentInfoRequest(filter, sortOrder, pageNumber, pageSize, docIds, 100);
+       return getDocumentInformation(request);
    }
 
 
@@ -230,7 +243,7 @@ public class TopicModelController {
         tmc.sqlDocumentTopicInfoQueryPath = p.getProperty("sql.documenttopicinfo.querypath");
         tmc.sqlTopicInfoQueryPath=p.getProperty("sql.topicinfo.querypath");
         tmc.getTopicInformation(null, null, "within_topic", true);
-        tmc.getDocumentsPerTopic(null, null,null);
+//        tmc.getDocumentsPerTopic(null, null,null);
 //        tmc.getDocumentInformation(ids,null, 0, 0);
     }
 }

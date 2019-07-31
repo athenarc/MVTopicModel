@@ -1,12 +1,10 @@
 package org.madgik.services;
 
 import org.apache.commons.collections4.CollectionUtils;
+import org.madgik.dtos.DocTopicDto;
 import org.madgik.dtos.TopicCurationDto;
 import org.madgik.dtos.TopicDto;
-import org.madgik.persistence.entities.Topic;
-import org.madgik.persistence.entities.TopicCuration;
-import org.madgik.persistence.entities.TopicCurationId;
-import org.madgik.persistence.entities.TopicId;
+import org.madgik.persistence.entities.*;
 import org.madgik.utils.Constants;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -101,6 +99,46 @@ public class MapperService {
             }
         });
         return topicCurations;
+    }
+
+    public DocTopicDto convertDocTopicEntityToDto(DocTopic docTopic) {
+        if (docTopic == null) return null;
+        DocTopicDto docTopicDto = new DocTopicDto();
+        if (docTopic.getDocTopicId() != null) {
+            docTopicDto.setDocId(docTopic.getDocTopicId().getDocId());
+            if (docTopic.getDocTopicId().getTopicId() != null) {
+                docTopicDto.setTopicId(docTopic.getDocTopicId().getTopicId());
+                docTopicDto.setExperimentId(docTopic.getDocTopicId().getExperimentId());
+            }
+        }
+        docTopicDto.setWeight(docTopic.getWeight());
+        docTopicDto.setInferred(docTopic.getInferred());
+        return docTopicDto;
+    }
+
+    public DocTopic convertDocTopicDtoToEntity(DocTopicDto docTopicDto) {
+        if (docTopicDto == null) return null;
+        DocTopic docTopic = new DocTopic();
+        DocTopicId docTopicId = new DocTopicId(docTopicDto.getDocId(), docTopicDto.getTopicId(),
+                docTopicDto.getExperimentId());
+        docTopic.setDocTopicId(docTopicId);
+        docTopic.setWeight(docTopicDto.getWeight());
+        docTopic.setInferred(docTopicDto.getInferred());
+        return docTopic;
+    }
+
+    public List<DocTopicDto> convertDocTopicListEntityToDto(List<DocTopic> docTopics) {
+        if (CollectionUtils.isEmpty(docTopics)) return null;
+        List<DocTopicDto> docTopicDtos = new ArrayList<>();
+        docTopics.forEach(docTopic -> docTopicDtos.add(convertDocTopicEntityToDto(docTopic)));
+        return docTopicDtos;
+    }
+
+    public List<DocTopic> convertDocTopicListDtoToEntity(List<DocTopicDto> docTopicDtos) {
+        if (CollectionUtils.isEmpty(docTopicDtos)) return null;
+        List<DocTopic> docTopics = new ArrayList<>();
+        docTopicDtos.forEach(docTopicDto -> docTopics.add(convertDocTopicDtoToEntity(docTopicDto)));
+        return docTopics;
     }
 
 }

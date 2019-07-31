@@ -1,11 +1,14 @@
 package org.madgik.persistence.entities;
 
+import org.hibernate.annotations.DynamicUpdate;
+
 import javax.persistence.*;
 import java.io.Serializable;
 import java.util.Objects;
 
 @Entity
 @Table(name = "topic_curation")
+@DynamicUpdate
 public class TopicCuration implements Serializable {
 
     @EmbeddedId
