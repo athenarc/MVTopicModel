@@ -26,4 +26,8 @@ public class Constants {
     public static final String TOPIC_CURATION_SERVICE = "topicCurationService";
     public static final String TOPIC_SERVICE = "topicService";
     public static final String VISUALIZATION_EXPERIMENT_SERVICE = "visualizationExperimentService";
+
+    /** Enums **/
+    public static final String SUCCESS = "SUCCESS";
+    public static final String FAIL = "FAIL";
 }

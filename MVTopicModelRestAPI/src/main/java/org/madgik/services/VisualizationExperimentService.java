@@ -1,5 +1,6 @@
 package org.madgik.services;
 
+import org.madgik.rest.requests.PageableRequest;
 import org.madgik.dtos.VisualizationExperimentDto;
 import org.madgik.persistence.entities.VisualizationExperiment;
 import org.madgik.persistence.repositories.VisualizationExperimentRepository;
@@ -19,8 +20,8 @@ public class VisualizationExperimentService {
     @Autowired
     private MapperService mapperService;
 
-    public Page<VisualizationExperimentDto> getAllVisualizationExperiments(Integer offset, Integer limit) {
-        Pageable pageable = PageRequest.of(offset, limit);
+    public Page<VisualizationExperimentDto> getAllVisualizationExperiments(PageableRequest pageRequest) {
+        Pageable pageable = PageRequest.of(pageRequest.getPageNumber(), pageRequest.getPageSize());
         Page<VisualizationExperiment> visualizationExperimentPage = repo.findAll(pageable);
         return visualizationExperimentPage.map(entity ->
                 mapperService.getDto(entity, VisualizationExperimentDto.class));

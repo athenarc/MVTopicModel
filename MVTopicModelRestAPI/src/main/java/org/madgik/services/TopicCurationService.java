@@ -1,5 +1,6 @@
 package org.madgik.services;
 
+import org.madgik.rest.requests.PageableRequest;
 import org.madgik.dtos.TopicCurationDto;
 import org.madgik.persistence.entities.TopicCuration;
 import org.madgik.persistence.entities.TopicCurationId;
@@ -11,7 +12,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import java.util.List;
 
 import java.util.Optional;
 
@@ -43,12 +43,11 @@ public class TopicCurationService {
         }
         return null;
     }
-    public Page<TopicCurationDto> getAllTopicCurations(Integer offset, Integer limit){
-        Pageable pageable = PageRequest.of(offset, limit);
+    public Page<TopicCurationDto> getAllTopicCurations(PageableRequest pageableRequest){
+        Pageable pageable = PageRequest.of(pageableRequest.getPageNumber(), pageableRequest.getPageSize());
         Page<TopicCuration> topicCurationPage = repo.findAll(pageable);
-        Page<TopicCurationDto> topicCurationDtoPage = topicCurationPage.map(entity ->
+        return topicCurationPage.map(entity ->
                 mapperService.convertTopicCurationEntityToDto(entity));
-	    return topicCurationDtoPage;
     }
 
 }
