@@ -1,6 +1,8 @@
 package org.madgik.dtos;
 
-public class TopicClusteringDto {
+import java.io.Serializable;
+
+public class TopicClusteringDto implements Serializable {
 
     private Integer clusterId;
     private Integer clusterMember;

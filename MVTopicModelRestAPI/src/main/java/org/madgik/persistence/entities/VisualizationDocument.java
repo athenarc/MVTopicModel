@@ -11,6 +11,8 @@ import javax.persistence.Table;
 @Table(name = "visualization_documents")
 public class VisualizationDocument extends AbstractEntity {
 
+    @Column(name = "title")
+    private String title;
     @Column(name = "pubyear")
     private String pubyear;
     @Column(name = "abstract")
@@ -38,9 +40,10 @@ public class VisualizationDocument extends AbstractEntity {
 
     }
 
-    public VisualizationDocument(String id, String pubyear, String abstractField, String abstractPmc, String otherAbstractPmc, String doctype, String projectAcronym,
+    public VisualizationDocument(String id, String title, String pubyear, String abstractField, String abstractPmc, String otherAbstractPmc, String doctype, String projectAcronym,
                                  String project, String journal, String doiId, String pmcId) {
         this.id = id;
+        this.title = title;
         this.pubyear = pubyear;
         this.abstractField = abstractField;
         this.abstractPmc = abstractPmc;
@@ -51,11 +54,12 @@ public class VisualizationDocument extends AbstractEntity {
         this.journal = journal;
         this.doiId = doiId;
         this.pmcId = pmcId;
-	this.salientTerms = "salient term1, salient term2";
+	    this.salientTerms = "salient term1, salient term2";
     }
 
-    public VisualizationDocument(String pubyear, String abstractField, String abstractPmc, String otherAbstractPmc, String doctype, String projectAcronym,
+    public VisualizationDocument(String title, String pubyear, String abstractField, String abstractPmc, String otherAbstractPmc, String doctype, String projectAcronym,
                                  String project, String journal, String doiId, String pmcId) {
+        this.title = title;
         this.pubyear = pubyear;
         this.abstractField = abstractField;
         this.abstractPmc = abstractPmc;
@@ -66,6 +70,14 @@ public class VisualizationDocument extends AbstractEntity {
         this.journal = journal;
         this.doiId = doiId;
         this.pmcId = pmcId;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
     }
 
     public String getPubyear() {
@@ -159,6 +171,7 @@ public class VisualizationDocument extends AbstractEntity {
     @Override
     public String toString() {
         return "VisualizationDocument{" +
+                "title='" + title + '\'' +
                 "pubyear='" + pubyear + '\'' +
                 ", abstractField='" + abstractField + '\'' +
                 ", abstractPmc='" + abstractPmc + '\'' +

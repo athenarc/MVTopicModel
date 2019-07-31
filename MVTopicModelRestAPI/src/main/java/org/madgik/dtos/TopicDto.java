@@ -1,9 +1,8 @@
 package org.madgik.dtos;
 
-import java.io.Serializable;
 import java.util.Objects;
 
-public class TopicDto implements Serializable {
+public class TopicDto extends ParentDto {
     private TopicIdDto topicId;
     private String title;
     private String category;

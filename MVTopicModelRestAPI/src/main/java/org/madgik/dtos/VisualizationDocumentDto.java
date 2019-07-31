@@ -2,6 +2,7 @@ package org.madgik.dtos;
 
 public class VisualizationDocumentDto extends AbstractDto {
 
+    private String title;
     private String pubyear;
     private String abstractField;
     private String abstractPmc;
@@ -18,9 +19,10 @@ public class VisualizationDocumentDto extends AbstractDto {
 
     }
 
-    public VisualizationDocumentDto(String id, String pubyear, String abstractField, String abstractPmc, String otherAbstractPmc, String doctype, String projectAcronym,
+    public VisualizationDocumentDto(String id, String title, String pubyear, String abstractField, String abstractPmc, String otherAbstractPmc, String doctype, String projectAcronym,
                                     String project, String journal, String doiId, String pmcId, String salientTerms) {
         this.id = id;
+        this.title = title;
         this.pubyear = pubyear;
         this.abstractField = abstractField;
         this.abstractPmc = abstractPmc;
@@ -34,8 +36,9 @@ public class VisualizationDocumentDto extends AbstractDto {
         this.salientTerms = salientTerms;
     }
 
-    public VisualizationDocumentDto(String pubyear, String abstractField, String abstractPmc, String otherAbstractPmc, String doctype, String projectAcronym,
+    public VisualizationDocumentDto(String title, String pubyear, String abstractField, String abstractPmc, String otherAbstractPmc, String doctype, String projectAcronym,
                                     String project, String journal, String doiId, String pmcId, String salientTerms) {
+        this.title = title;
         this.pubyear = pubyear;
         this.abstractField = abstractField;
         this.abstractPmc = abstractPmc;
@@ -47,6 +50,14 @@ public class VisualizationDocumentDto extends AbstractDto {
         this.doiId = doiId;
         this.pmcId = pmcId;
         this.salientTerms = salientTerms;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
     }
 
     public String getPubyear() {
@@ -141,6 +152,7 @@ public class VisualizationDocumentDto extends AbstractDto {
     public String toString() {
         return "VisualizationDocumentDto{" +
                 "pubyear='" + pubyear + '\'' +
+                "title='" + title + '\'' +
                 ", abstractField='" + abstractField + '\'' +
                 ", abstractPmc='" + abstractPmc + '\'' +
                 ", otherAbstractPmc='" + otherAbstractPmc + '\'' +

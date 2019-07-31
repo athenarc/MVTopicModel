@@ -8,7 +8,7 @@ import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
-public class VisualizationExperimentDto {
+public class VisualizationExperimentDto extends ParentDto {
 
     private String experimentId;
     @JsonDeserialize(using = LocalDateTimeDeserializer.class)

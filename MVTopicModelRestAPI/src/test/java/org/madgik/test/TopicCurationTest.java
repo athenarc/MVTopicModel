@@ -1,15 +1,11 @@
 package org.madgik.test;
 
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.madgik.dtos.TopicCurationDto;
-import org.madgik.dtos.TopicCurationIdDto;
 import org.madgik.dtos.TopicDto;
 import org.madgik.dtos.TopicIdDto;
-import org.madgik.persistence.entities.Topic;
-import org.madgik.persistence.entities.TopicId;
 import org.madgik.services.TopicCurationService;
 import org.madgik.services.TopicService;
 import org.madgik.test.config.TestConfig;
@@ -41,7 +37,6 @@ import org.springframework.web.context.WebApplicationContext;
         @Sql(executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD, scripts = {"classpath:topiccuration-inserts.sql"}),
         @Sql(executionPhase = Sql.ExecutionPhase.AFTER_TEST_METHOD, scripts = {"classpath:cleanup.sql"})
 })
-
 public class TopicCurationTest {
 
     @Autowired

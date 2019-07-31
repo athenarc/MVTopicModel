@@ -1,9 +1,8 @@
 package org.madgik.dtos;
 
-import java.io.Serializable;
 import java.util.Objects;
 
-public abstract class AbstractDto implements Serializable {
+public abstract class AbstractDto extends ParentDto {
 
     protected String id;
 
