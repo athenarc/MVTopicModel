@@ -16,7 +16,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -126,18 +125,19 @@ public class TopicModelController {
     @ResponseBody
     public Page<VisualizationDocumentDto> getDocumentInformation(@RequestBody DocumentInfoRequest request) {
         if(request.getNumChars() == null) request.setNumChars(100);
-        Page<VisualizationDocumentDto> visualizationDocumentDtos =visualizationDocumentService.getVisualizationDocumentsInIds(request.getDocumentIds(), request.getOffset(), request.getLimit());
+        Page<VisualizationDocumentDto> visualizationDocumentDtos =visualizationDocumentService.getVisualizationDocumentsInIds(
+                request.getDocumentIds(), request.getOffset(), request.getLimit());
         visualizationDocumentDtos.forEach(doc -> {
             if (StringUtils.isNotBlank(doc.getAbstractField())) {
-                doc.setAbstractField(doc.getAbstractField().substring(request.getNumChars()));
+                doc.setAbstractField(doc.getAbstractField().substring(Math.min(request.getNumChars(), doc.getAbstractField().length())));
             }
 
             if (StringUtils.isNotBlank(doc.getAbstractPmc())) {
-                doc.setAbstractPmc(doc.getAbstractPmc().substring(request.getNumChars()));
+                doc.setAbstractPmc(doc.getAbstractPmc().substring(Math.min(request.getNumChars(), doc.getAbstractPmc().length())));
             }
 
             if (StringUtils.isNotBlank(doc.getOtherAbstractPmc())) {
-                doc.setOtherAbstractPmc(doc.getAbstractPmc().substring(request.getNumChars()));
+                doc.setOtherAbstractPmc(doc.getOtherAbstractPmc().substring(Math.min(request.getNumChars(), doc.getOtherAbstractPmc().length())));
             }
         });
         return visualizationDocumentDtos;
