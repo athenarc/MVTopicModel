@@ -31,7 +31,7 @@ public class VisualizationDocument extends AbstractEntity {
     private String doiId;
     @Column(name = "pmc_id")
     private String pmcId;
-    @Column(name = "salient_terms")
+    @Column(name = "salients")
     private String salientTerms;
 
     public VisualizationDocument() {
