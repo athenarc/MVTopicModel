@@ -7,12 +7,14 @@ import org.springframework.context.support.PropertySourcesPlaceholderConfigurer;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
 @EnableWebMvc
 @ComponentScan(basePackages = "org.madgik")
-public class WebConfig {
+public class WebConfig implements WebMvcConfigurer{
 
     /**
      * Load properties files. Check classpath first and then catalina base.
@@ -29,4 +31,10 @@ public class WebConfig {
         p.setLocations(resourceLocations);
         return p;
     }
+
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        registry.addMapping("/**");
+    }
+
 }
