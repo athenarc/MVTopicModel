@@ -47,20 +47,20 @@ public class TopicModelController {
     @Autowired
     private DocTopicService docTopicService;
 
-    @Value("${serialization.path}")
-    private String serializationBasePath;
-
-    @Value("${sql.connection.string}")
-    private String sqlConnectionString;
-
-    @Value("${sql.topicinfo.querypath}")
-    private String sqlTopicInfoQueryPath;
-
-    @Value("${sql.documenttopicinfo.querypath}")
-    private String sqlDocumentTopicInfoQueryPath;
-
-    @Value("${sql.documentvisualizationinfo.querypath}")
-    private String sqlDocumentVisualizationInfoQueryPath;
+//    @Value("${serialization.path}")
+//    private String serializationBasePath;
+//
+//    @Value("${sql.connection.string}")
+//    private String sqlConnectionString;
+//
+//    @Value("${sql.topicinfo.querypath}")
+//    private String sqlTopicInfoQueryPath;
+//
+//    @Value("${sql.documenttopicinfo.querypath}")
+//    private String sqlDocumentTopicInfoQueryPath;
+//
+//    @Value("${sql.documentvisualizationinfo.querypath}")
+//    private String sqlDocumentVisualizationInfoQueryPath;
 
     @RequestMapping(value = "/predict", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
@@ -106,9 +106,21 @@ public class TopicModelController {
                                                  @RequestParam("pageNumber") Integer pageNumber,
                                                  @RequestParam("pageSize") Integer pageSize,
                                                  @RequestParam("topicId") Integer topicId,
+                                                 @RequestParam("maxNumDocuments") Integer maxNumDocuments,
                                                  @RequestParam("experimentId") String experimentId){
+
        if (experimentId == null || experimentId.isEmpty()) experimentId = "JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay";
+       if (sortOrder == null || sortOrder.isEmpty()) sortOrder = "asc";
+       if (filter == null || filter.isEmpty()) filter = "";
+       if (pageSize == null) pageSize = 10;
+       if (pageNumber == null) pageNumber = 0;
+
        List<DocTopicDto> docTopicDtos = docTopicService.getDocTopicsByTopicIdAndExperimentId(topicId, experimentId);
+       logger.info(String.format("Got %d documents for topic id %d and experiment id %s.", docTopicDtos.size(), topicId, experimentId));
+       if (maxNumDocuments != null){
+           docTopicDtos.subList(0, maxNumDocuments);
+           logger.info(String.format("Limited to %d by request param.", maxNumDocuments));
+       }
        List<String> docIds = docTopicDtos.stream().map(DocTopicDto::getDocId).collect(Collectors.toList());
        DocumentInfoRequest request = new DocumentInfoRequest(filter, sortOrder, pageNumber, pageSize, docIds, 100);
        return getDocumentInformation(request);
@@ -135,40 +147,6 @@ public class TopicModelController {
             }
         });
         return visualizationDocumentDtos;
-    }
-
-    @RequestMapping(value = "/topictokens", method = RequestMethod.GET)
-    public String getTopicInformation(String expid, Double prob_threshold, String weight_type, Boolean refresh) {
-
-        if (expid == null || expid.isEmpty()) expid = "JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay";
-        if (prob_threshold == null) prob_threshold = 0.05d;
-        if (refresh == null) refresh = false;
-        if (weight_type == null) weight_type = "across_topics";
-        if (!(weight_type.equals("across_topics") || weight_type.equals("within_topic"))){
-            logger.error("Undefined weight type: " + weight_type);
-            return null;
-        }
-
-        String serialization_path = serializationBasePath + "topic_tokens_exp_" + expid + "_probthresh_" + prob_threshold;
-
-        String output = getSerialized(serialization_path, refresh);
-        if (output != null) return output;
-
-        // resulting container: topic -> modality -> token -> weight
-        Map<Integer, Map<String, Map<String, Double>>> res = new HashMap<>();
-
-        try {
-            String query = new String(Files.readAllBytes(Paths.get(sqlTopicInfoQueryPath)));
-            query = query.replaceAll("EXPERIMENT_IDENTIFIER", "'" + expid + "'");
-            SQLTMDataSource ds = new SQLTMDataSource(sqlConnectionString);
-            res = ds.getTopicInformation(query, prob_threshold, weight_type, expid);
-        } catch (IOException | SQLException e) {
-            logger.error(e.getMessage());
-        }
-        output = new Gson().toJson(res);
-        // serialize
-        serialize(serialization_path, output);
-        return output;
     }
 
     @RequestMapping(value = "/topicclustering", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -219,31 +197,5 @@ public class TopicModelController {
                                                                            @RequestParam("pageSize") Integer pageSize) {
         PageableRequest request = new PageableRequest(filter, sortOrder, pageNumber, pageSize);
         return visualizationExperimentService.getAllVisualizationExperiments(request);
-    }
-
-    public static void main(String[] args) {
-        List<String> ids = new ArrayList<>();
-        ids.add("50|acnbad______::48b13e3bf556d6e858bed820143ef25d");
-        ids.add("50|acnbad______::71d981639718b3130ffdf8b29d18792e");
-        ids.add("50|base_oa_____::007cdd1252e5f998b25f25c8b6d4453f");
-        ids.add("50|base_oa_____::00ecbfbc821a0b359769b1ee2ebb7282");
-        ids.add("50|base_oa_____::0190d46e279f9c4e0364be873513a3fe");
-        ids.add("50|base_oa_____::02a67ddc101d626df34a5062428dcdf8");
-        ids.add("50|base_oa_____::02a87b4d552511958d4a322a713e2816");
-
-        Properties p = new Properties();
-        try {
-            p.load(new FileReader("/home/nik/athena/code/MVTopicModel/MVTopicModelRestAPI/src/main/resources/application.properties"));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        TopicModelController tmc = new TopicModelController();
-        tmc.sqlConnectionString = p.getProperty("sql.connection.string");
-        tmc.sqlDocumentVisualizationInfoQueryPath = p.getProperty("sql.documentvisualizationinfo.querypath");
-        tmc.sqlDocumentTopicInfoQueryPath = p.getProperty("sql.documenttopicinfo.querypath");
-        tmc.sqlTopicInfoQueryPath=p.getProperty("sql.topicinfo.querypath");
-        tmc.getTopicInformation(null, null, "within_topic", true);
-//        tmc.getDocumentsPerTopic(null, null,null);
-//        tmc.getDocumentInformation(ids,null, 0, 0);
     }
 }
