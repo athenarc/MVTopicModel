@@ -6,7 +6,8 @@
 #
 # current configuration
 MVTopicModel/src/main/resources/config.properties
-MVTopicModelRESTApi/src/main/resources/application.properties
+application.properties
+
 
 target
 logs
