@@ -1,7 +1,7 @@
 package org.madgik.persistence.repositories;
 
 import org.madgik.persistence.entities.DocTopic;
-import org.madgik.persistence.entities.DocTopicId;
+import org.madgik.persistence.compositeIds.DocTopicId;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

@@ -1,0 +1,1 @@
+INSERT INTO visualization_topic_docs_per_journal(count,topicid,journalid,journaltitle,experimentid) VALUES (1, 1, 1, 'journal1', 'topic1')

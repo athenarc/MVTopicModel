@@ -1,6 +1,7 @@
 package org.madgik.persistence.entities;
 
 import org.hibernate.annotations.DynamicUpdate;
+import org.madgik.persistence.compositeIds.TopicId;
 
 import javax.persistence.*;
 import javax.validation.constraints.Size;
@@ -61,7 +62,6 @@ public class Topic implements Serializable {
     private Integer weightedCounts;
     @Column(name = "rk")
     private Integer rk;
-
 //    @ManyToMany(mappedBy = "topic", cascade=CascadeType.ALL)
 //    private List<DocTopic> docTopicList = new ArrayList<>();
 

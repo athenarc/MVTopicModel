@@ -8,6 +8,7 @@ import org.madgik.io.SQLTMDataSource;
 import org.madgik.rest.requests.DocumentInfoRequest;
 import org.madgik.rest.requests.PageableRequest;
 import org.madgik.rest.requests.TopicCurationRequest;
+import org.madgik.rest.requests.VisualizationTopicDocsPerJournalRequest;
 import org.madgik.services.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,6 +47,9 @@ public class TopicModelController {
 
     @Autowired
     private DocTopicService docTopicService;
+
+    @Autowired
+    private VisualizationTopicDocsPerJournalService visualizationTopicDocsPerJournalService;
 
 //    @Value("${serialization.path}")
 //    private String serializationBasePath;
@@ -197,5 +201,17 @@ public class TopicModelController {
                                                                            @RequestParam("pageSize") Integer pageSize) {
         PageableRequest request = new PageableRequest(filter, sortOrder, pageNumber, pageSize);
         return visualizationExperimentService.getAllVisualizationExperiments(request);
+    }
+
+    @RequestMapping(value = "/topicDocsPerJournal", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Page<VisualizationTopicDocsPerJournalDto> getTopicDocsPerJournal(@RequestParam("filter") String filter,
+                                                                            @RequestParam("sortOrder") String sortOrder,
+                                                                            @RequestParam("pageNumber") Integer pageNumber,
+                                                                            @RequestParam("pageSize") Integer pageSize,
+                                                                            @RequestParam("topicId") Integer topicId,
+                                                                            @RequestParam("experimentId") String experimentId) {
+        VisualizationTopicDocsPerJournalRequest request = new VisualizationTopicDocsPerJournalRequest(filter, sortOrder, pageNumber, pageSize, topicId, experimentId);
+        return visualizationTopicDocsPerJournalService.getVisualizationTopicDocsPerJournal(request);
     }
 }
