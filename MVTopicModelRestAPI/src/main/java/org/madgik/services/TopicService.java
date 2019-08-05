@@ -2,7 +2,7 @@ package org.madgik.services;
 
 import org.madgik.dtos.TopicDto;
 import org.madgik.persistence.entities.Topic;
-import org.madgik.persistence.entities.TopicId;
+import org.madgik.persistence.compositeIds.TopicId;
 import org.madgik.persistence.repositories.TopicRepository;
 import org.madgik.utils.Constants;
 import org.springframework.beans.factory.annotation.Autowired;

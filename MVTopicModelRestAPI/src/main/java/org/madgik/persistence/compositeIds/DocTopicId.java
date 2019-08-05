@@ -1,4 +1,4 @@
-package org.madgik.persistence.entities;
+package org.madgik.persistence.compositeIds;
 
 import javax.persistence.Column;
 import javax.persistence.Embeddable;

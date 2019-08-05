@@ -1,6 +1,7 @@
 package org.madgik.persistence.entities;
 
 import org.hibernate.annotations.DynamicUpdate;
+import org.madgik.persistence.compositeIds.DocTopicId;
 
 import javax.persistence.Column;
 import javax.persistence.EmbeddedId;

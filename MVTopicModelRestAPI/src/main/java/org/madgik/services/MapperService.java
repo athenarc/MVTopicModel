@@ -4,6 +4,11 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.madgik.dtos.DocTopicDto;
 import org.madgik.dtos.TopicCurationDto;
 import org.madgik.dtos.TopicDto;
+import org.madgik.dtos.VisualizationTopicDocsPerJournalDto;
+import org.madgik.persistence.compositeIds.DocTopicId;
+import org.madgik.persistence.compositeIds.TopicCurationId;
+import org.madgik.persistence.compositeIds.TopicId;
+import org.madgik.persistence.compositeIds.VisualizationTopicDocsPerJournalId;
 import org.madgik.persistence.entities.*;
 import org.madgik.utils.Constants;
 import org.modelmapper.ModelMapper;
@@ -141,4 +146,44 @@ public class MapperService {
         return docTopics;
     }
 
+    public VisualizationTopicDocsPerJournalDto convertVisualizationTopicDocsPerJournalEntityToDto(VisualizationTopicDocsPerJournal entity) {
+        if (entity == null) return null;
+        VisualizationTopicDocsPerJournalDto dto = new VisualizationTopicDocsPerJournalDto();
+        if (entity.getVisualizationTopicDocsPerJournalId() != null) {
+            dto.setTopicId(entity.getVisualizationTopicDocsPerJournalId().getTopicId());
+            dto.setExperimentId(entity.getVisualizationTopicDocsPerJournalId().getExperimentId());
+            dto.setJournalId(entity.getVisualizationTopicDocsPerJournalId().getJournalId());
+        }
+        dto.setCount(entity.getCount());
+        dto.setJournalTitle(entity.getJournalTitle());
+        return dto;
+    }
+
+    public VisualizationTopicDocsPerJournal convertVisualizationTopicDocsPerJournalDtoToEntity(VisualizationTopicDocsPerJournalDto dto) {
+        if (dto == null) return null;
+        VisualizationTopicDocsPerJournal entity = new VisualizationTopicDocsPerJournal();
+        VisualizationTopicDocsPerJournalId id = new VisualizationTopicDocsPerJournalId(dto.getTopicId(), dto.getExperimentId(), dto.getJournalId());
+        entity.setVisualizationTopicDocsPerJournalId(id);
+        entity.setCount(dto.getCount());
+        entity.setJournalTitle(dto.getJournalTitle());
+        return entity;
+    }
+
+    public List<VisualizationTopicDocsPerJournalDto> convertVisualizationTopicDocsPerJournalEntityListToDto(List<VisualizationTopicDocsPerJournal> entities) {
+        if (CollectionUtils.isEmpty(entities)) return null;
+        List<VisualizationTopicDocsPerJournalDto> dtos = new ArrayList<>();
+        entities.forEach(entity -> {
+            if (entity != null) dtos.add(convertVisualizationTopicDocsPerJournalEntityToDto(entity));
+        });
+        return dtos;
+    }
+
+    public List<VisualizationTopicDocsPerJournal> convertVisualizationTopicDocsPerJournalDtoListToEntity(List<VisualizationTopicDocsPerJournalDto> dtos) {
+        if (CollectionUtils.isEmpty(dtos)) return null;
+        List<VisualizationTopicDocsPerJournal> entities = new ArrayList<>();
+        dtos.forEach(dto -> {
+            if (dto != null) entities.add(convertVisualizationTopicDocsPerJournalDtoToEntity(dto));
+        });
+        return entities;
+    }
 }
