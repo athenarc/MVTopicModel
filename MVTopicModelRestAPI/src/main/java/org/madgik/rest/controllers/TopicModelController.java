@@ -122,7 +122,7 @@ public class TopicModelController {
        List<DocTopicDto> docTopicDtos = docTopicService.getDocTopicsByTopicIdAndExperimentId(topicId, experimentId);
        logger.info(String.format("Got %d documents for topic id %d and experiment id %s.", docTopicDtos.size(), topicId, experimentId));
        if (maxNumDocuments != null){
-           docTopicDtos.subList(0, maxNumDocuments);
+           docTopicDtos = docTopicDtos.subList(0, maxNumDocuments);
            logger.info(String.format("Limited to %d by request param.", maxNumDocuments));
        }
        List<String> docIds = docTopicDtos.stream().map(DocTopicDto::getDocId).collect(Collectors.toList());
