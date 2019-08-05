@@ -1,12 +1,17 @@
 package org.madgik.dtos;
 
 import java.util.Objects;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 public class VisualizationTopicDocsPerJournalDto extends ParentDto {
 
+    @JsonIgnore
     private Integer topicId;
+    @JsonIgnore
     private String experimentId;
+    @JsonIgnore
     private String journalId;
+
     private Integer count;
     private String journalTitle;
 
