@@ -20,14 +20,26 @@ public class VisualizationTopicDocsPerJournal implements Serializable {
     @Column(name = "journaltitle")
     private String journalTitle;
 
+    public Integer getDocTopicCount() {
+        return docTopicCount;
+    }
+
+    public void setDocTopicCount(Integer docTopicCount) {
+        this.docTopicCount = docTopicCount;
+    }
+
+    @Column(name="doc_topic_count")
+    private Integer docTopicCount;
+
     public VisualizationTopicDocsPerJournal() {
 
     }
 
-    public VisualizationTopicDocsPerJournal(VisualizationTopicDocsPerJournalId visualizationTopicDocsPerJournalId, Integer count, String journalTitle) {
+    public VisualizationTopicDocsPerJournal(VisualizationTopicDocsPerJournalId visualizationTopicDocsPerJournalId, Integer count, String journalTitle, Integer docTopicCount) {
         this.visualizationTopicDocsPerJournalId = visualizationTopicDocsPerJournalId;
         this.count = count;
         this.journalTitle = journalTitle;
+        this.docTopicCount = docTopicCount;
     }
 
     public VisualizationTopicDocsPerJournalId getVisualizationTopicDocsPerJournalId() {
