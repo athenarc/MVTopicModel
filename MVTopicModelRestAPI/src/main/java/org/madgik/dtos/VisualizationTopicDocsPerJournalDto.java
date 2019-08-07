@@ -15,16 +15,27 @@ public class VisualizationTopicDocsPerJournalDto extends ParentDto {
     private Integer count;
     private String journalTitle;
 
+    public Integer getDocTopicCount() {
+        return docTopicCount;
+    }
+
+    public void setDocTopicCount(Integer docTopicCount) {
+        this.docTopicCount = docTopicCount;
+    }
+
+    private Integer docTopicCount;
+
     public VisualizationTopicDocsPerJournalDto() {
 
     }
 
-    public VisualizationTopicDocsPerJournalDto(Integer topicId, String experimentId, String journalId, Integer count, String journalTitle) {
+    public VisualizationTopicDocsPerJournalDto(Integer topicId, String experimentId, String journalId, Integer count, String journalTitle, Integer docTopicCount) {
         this.topicId = topicId;
         this.experimentId = experimentId;
         this.journalId = journalId;
         this.count = count;
         this.journalTitle = journalTitle;
+        this.docTopicCount = docTopicCount;
     }
 
     public Integer getTopicId() {
@@ -90,6 +101,7 @@ public class VisualizationTopicDocsPerJournalDto extends ParentDto {
                 ", journalId='" + journalId + '\'' +
                 ", count=" + count +
                 ", journalTitle='" + journalTitle + '\'' +
+                ", docTopicCount='" + docTopicCount + '\'' +
                 '}';
     }
 }

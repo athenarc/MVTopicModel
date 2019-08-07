@@ -156,6 +156,7 @@ public class MapperService {
         }
         dto.setCount(entity.getCount());
         dto.setJournalTitle(entity.getJournalTitle());
+        dto.setDocTopicCount(entity.getDocTopicCount());
         return dto;
     }
 
@@ -166,6 +167,7 @@ public class MapperService {
         entity.setVisualizationTopicDocsPerJournalId(id);
         entity.setCount(dto.getCount());
         entity.setJournalTitle(dto.getJournalTitle());
+        entity.setDocTopicCount(dto.getDocTopicCount());
         return entity;
     }
 
