@@ -139,15 +139,15 @@ public class TopicModelController {
                 request.getDocumentIds(), request.getPageNumber(), request.getPageSize());
         visualizationDocumentDtos.forEach(doc -> {
             if (StringUtils.isNotBlank(doc.getAbstractField())) {
-                doc.setAbstractField(doc.getAbstractField().substring(Math.min(request.getNumChars(), doc.getAbstractField().length())));
+                doc.setAbstractField(doc.getAbstractField().substring(0, Math.min(request.getNumChars(), doc.getAbstractField().length())));
             }
 
             if (StringUtils.isNotBlank(doc.getAbstractPmc())) {
-                doc.setAbstractPmc(doc.getAbstractPmc().substring(Math.min(request.getNumChars(), doc.getAbstractPmc().length())));
+                doc.setAbstractPmc(doc.getAbstractPmc().substring(0, Math.min(request.getNumChars(), doc.getAbstractPmc().length())));
             }
 
             if (StringUtils.isNotBlank(doc.getOtherAbstractPmc())) {
-                doc.setOtherAbstractPmc(doc.getOtherAbstractPmc().substring(Math.min(request.getNumChars(), doc.getOtherAbstractPmc().length())));
+                doc.setOtherAbstractPmc(doc.getOtherAbstractPmc().substring(0, Math.min(request.getNumChars(), doc.getOtherAbstractPmc().length())));
             }
         });
         return visualizationDocumentDtos;
