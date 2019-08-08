@@ -126,7 +126,7 @@ public class TopicModelController {
            logger.info(String.format("Limited to %d by request param.", maxNumDocuments));
        }
        List<String> docIds = docTopicDtos.stream().map(DocTopicDto::getDocId).collect(Collectors.toList());
-       DocumentInfoRequest request = new DocumentInfoRequest(filter, sortOrder, pageNumber, pageSize, docIds, 100);
+       DocumentInfoRequest request = new DocumentInfoRequest(filter, sortOrder, pageNumber, pageSize, docIds);
        return getDocumentInformation(request);
    }
 
@@ -137,19 +137,6 @@ public class TopicModelController {
         if(request.getNumChars() == null) request.setNumChars(100);
         Page<VisualizationDocumentDto> visualizationDocumentDtos =visualizationDocumentService.getVisualizationDocumentsInIds(
                 request.getDocumentIds(), request.getPageNumber(), request.getPageSize());
-        visualizationDocumentDtos.forEach(doc -> {
-            if (StringUtils.isNotBlank(doc.getAbstractField())) {
-                doc.setAbstractField(doc.getAbstractField().substring(0, Math.min(request.getNumChars(), doc.getAbstractField().length())));
-            }
-
-            if (StringUtils.isNotBlank(doc.getAbstractPmc())) {
-                doc.setAbstractPmc(doc.getAbstractPmc().substring(0, Math.min(request.getNumChars(), doc.getAbstractPmc().length())));
-            }
-
-            if (StringUtils.isNotBlank(doc.getOtherAbstractPmc())) {
-                doc.setOtherAbstractPmc(doc.getOtherAbstractPmc().substring(0, Math.min(request.getNumChars(), doc.getOtherAbstractPmc().length())));
-            }
-        });
         return visualizationDocumentDtos;
     }
 

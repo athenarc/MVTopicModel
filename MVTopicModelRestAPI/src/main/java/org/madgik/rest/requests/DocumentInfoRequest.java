@@ -17,6 +17,11 @@ public class DocumentInfoRequest extends PageableRequest {
         this.documentIds = documentIds;
         this.numChars = numChars;
     }
+    public DocumentInfoRequest(String filter, String sortOrder, Integer pageNumber, Integer pageSize, List<String> documentIds) {
+        super(filter, sortOrder, pageNumber, pageSize);
+        this.documentIds = documentIds;
+        this.numChars = -1;
+    }
 
     public List<String> getDocumentIds() {
         return documentIds;
