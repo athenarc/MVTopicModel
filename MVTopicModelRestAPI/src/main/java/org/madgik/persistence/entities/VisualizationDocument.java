@@ -36,12 +36,23 @@ public class VisualizationDocument extends AbstractEntity {
     @Column(name = "salients")
     private String salientTerms;
 
+    public String getAuthors() {
+        return authors;
+    }
+
+    public void setAuthors(String authors) {
+        this.authors = authors;
+    }
+
+    @Column(name = "authors")
+    private String authors;
+
     public VisualizationDocument() {
 
     }
 
     public VisualizationDocument(String id, String title, String pubyear, String abstractField, String abstractPmc, String otherAbstractPmc, String doctype, String projectAcronym,
-                                 String project, String journal, String doiId, String pmcId) {
+                                 String project, String journal, String doiId, String pmcId, String authors) {
         this.id = id;
         this.title = title;
         this.pubyear = pubyear;
@@ -54,11 +65,12 @@ public class VisualizationDocument extends AbstractEntity {
         this.journal = journal;
         this.doiId = doiId;
         this.pmcId = pmcId;
+        this.authors = authors;
 	    this.salientTerms = "salient term1, salient term2";
     }
 
     public VisualizationDocument(String title, String pubyear, String abstractField, String abstractPmc, String otherAbstractPmc, String doctype, String projectAcronym,
-                                 String project, String journal, String doiId, String pmcId) {
+                                 String project, String journal, String doiId, String pmcId, String authors) {
         this.title = title;
         this.pubyear = pubyear;
         this.abstractField = abstractField;
@@ -70,6 +82,7 @@ public class VisualizationDocument extends AbstractEntity {
         this.journal = journal;
         this.doiId = doiId;
         this.pmcId = pmcId;
+        this.authors = authors;
     }
 
     public String getTitle() {
@@ -184,6 +197,7 @@ public class VisualizationDocument extends AbstractEntity {
                 ", pmcId='" + pmcId + '\'' +
                 ", id='" + id + '\'' +
                 ", salientTerms='" + salientTerms + '\'' +
+                ", authors='" + authors + '\'' +
                 '}';
     }
 }
