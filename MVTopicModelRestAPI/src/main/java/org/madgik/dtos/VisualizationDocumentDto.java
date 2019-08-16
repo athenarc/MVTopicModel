@@ -15,12 +15,22 @@ public class VisualizationDocumentDto extends AbstractDto {
     private String pmcId;
     private String salientTerms;
 
+    public String getAuthors() {
+        return authors;
+    }
+
+    public void setAuthors(String authors) {
+        this.authors = authors;
+    }
+
+    private String authors;
+
     public VisualizationDocumentDto() {
 
     }
 
     public VisualizationDocumentDto(String id, String title, String pubyear, String abstractField, String abstractPmc, String otherAbstractPmc, String doctype, String projectAcronym,
-                                    String project, String journal, String doiId, String pmcId, String salientTerms) {
+                                    String project, String journal, String doiId, String pmcId, String salientTerms, String authors) {
         this.id = id;
         this.title = title;
         this.pubyear = pubyear;
@@ -34,10 +44,11 @@ public class VisualizationDocumentDto extends AbstractDto {
         this.doiId = doiId;
         this.pmcId = pmcId;
         this.salientTerms = salientTerms;
+        this.authors = authors;
     }
 
     public VisualizationDocumentDto(String title, String pubyear, String abstractField, String abstractPmc, String otherAbstractPmc, String doctype, String projectAcronym,
-                                    String project, String journal, String doiId, String pmcId, String salientTerms) {
+                                    String project, String journal, String doiId, String pmcId, String salientTerms, String authors) {
         this.title = title;
         this.pubyear = pubyear;
         this.abstractField = abstractField;
@@ -49,6 +60,7 @@ public class VisualizationDocumentDto extends AbstractDto {
         this.journal = journal;
         this.doiId = doiId;
         this.pmcId = pmcId;
+        this.authors = authors;
         this.salientTerms = salientTerms;
     }
 
@@ -163,6 +175,7 @@ public class VisualizationDocumentDto extends AbstractDto {
                 ", doiId='" + doiId + '\'' +
                 ", pmcId='" + pmcId + '\'' +
                 ", salientTerms='" + salientTerms + '\'' +
+                ", authors='" + authors + '\'' +
                 ", id='" + id + '\'' +
                 '}';
     }
