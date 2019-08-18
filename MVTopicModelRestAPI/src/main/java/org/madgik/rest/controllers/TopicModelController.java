@@ -49,6 +49,9 @@ public class TopicModelController {
     private DocTopicService docTopicService;
 
     @Autowired
+    private DocJournalService docJournalService;
+
+    @Autowired
     private VisualizationTopicDocsPerJournalService visualizationTopicDocsPerJournalService;
 
 //    @Value("${serialization.path}")
@@ -107,6 +110,7 @@ public class TopicModelController {
    @ResponseBody
    public Page<VisualizationDocumentDto> getDocumentsPerTopic(@RequestParam("filter") String filter,
                                                  @RequestParam("sortOrder") String sortOrder,
+                                                 @RequestParam("journal") String journal,
                                                  @RequestParam("pageNumber") Integer pageNumber,
                                                  @RequestParam("pageSize") Integer pageSize,
                                                  @RequestParam("topicId") Integer topicId,
@@ -119,13 +123,47 @@ public class TopicModelController {
        if (pageSize == null) pageSize = 10;
        if (pageNumber == null) pageNumber = 0;
 
+       // limit to topic and experiment id
        List<DocTopicDto> docTopicDtos = docTopicService.getDocTopicsByTopicIdAndExperimentId(topicId, experimentId);
-       logger.info(String.format("Got %d documents for topic id %d and experiment id %s.", docTopicDtos.size(), topicId, experimentId));
-       if (maxNumDocuments != null){
-           docTopicDtos = docTopicDtos.subList(0, maxNumDocuments);
-           logger.info(String.format("Limited to %d by request param.", maxNumDocuments));
-       }
+
+       logger.info(String.format("Got %d documents for topic id %d and experiment id %s.",
+               docTopicDtos.size(), topicId, experimentId));
+
        List<String> docIds = docTopicDtos.stream().map(DocTopicDto::getDocId).collect(Collectors.toList());
+
+       // limit to specified journal constraint, if present
+       if (journal != null && ! journal.isEmpty()){
+
+           List<String> jour_docids = new ArrayList<>();
+           // batch size for SQL query
+           int batchSize = 1000;
+           int batchIndex = 0;
+           while (batchIndex * batchSize < docIds.size()){
+               int startIndex = batchIndex*batchSize;
+               List<DocJournalDto> djs = docJournalService.getDocsWithJournal(docIds.subList(startIndex, startIndex + batchSize), journal);
+
+               djs.forEach(dj->{
+                   jour_docids.add(dj.getDocid()) ;
+               });
+               batchIndex ++;
+               logger.info(String.format("Got %d journal %s items from %d-sized batch # %d", jour_docids.size(), journal, batchSize, batchIndex));
+               if (maxNumDocuments != null && maxNumDocuments <= jour_docids.size()){
+                   logger.info(String.format("Stopping batch-queries since max num documents (%d) was satisfied.", maxNumDocuments));
+                   break;
+               }
+           }
+           docIds = jour_docids;
+           logger.info(String.format("Limited to %d docs, since input num constraint is: %d", docIds.size(), maxNumDocuments));
+       }
+
+
+       if (maxNumDocuments != null){
+           docIds = docIds.subList(0, maxNumDocuments);
+           logger.info(String.format("Limited to %d by request param.", docIds.size()));
+       }
+
+
+
        DocumentInfoRequest request = new DocumentInfoRequest(filter, sortOrder, pageNumber, pageSize, docIds);
        return getDocumentInformation(request);
    }
@@ -201,4 +239,13 @@ public class TopicModelController {
         VisualizationTopicDocsPerJournalRequest request = new VisualizationTopicDocsPerJournalRequest(filter, sortOrder, pageNumber, pageSize, topicId, experimentId);
         return visualizationTopicDocsPerJournalService.getVisualizationTopicDocsPerJournal(request);
     }
+
+    public static void main(String[] args) {
+
+        TopicModelController tmc = new TopicModelController();
+        tmc.getDocumentsPerTopic(null, null, "",0,10,0,
+                10,"JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay");
+
+    }
 }
+

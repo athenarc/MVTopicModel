@@ -15,3 +15,7 @@ logs
 # intellij
 .idea
 *.iml
+*.ser
+tomcat/
+test/
+*.json

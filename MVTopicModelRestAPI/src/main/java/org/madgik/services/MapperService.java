@@ -1,10 +1,7 @@
 package org.madgik.services;
 
 import org.apache.commons.collections4.CollectionUtils;
-import org.madgik.dtos.DocTopicDto;
-import org.madgik.dtos.TopicCurationDto;
-import org.madgik.dtos.TopicDto;
-import org.madgik.dtos.VisualizationTopicDocsPerJournalDto;
+import org.madgik.dtos.*;
 import org.madgik.persistence.compositeIds.DocTopicId;
 import org.madgik.persistence.compositeIds.TopicCurationId;
 import org.madgik.persistence.compositeIds.TopicId;
@@ -187,5 +184,13 @@ public class MapperService {
             if (dto != null) entities.add(convertVisualizationTopicDocsPerJournalDtoToEntity(dto));
         });
         return entities;
+    }
+    public List<DocJournalDto> convertDocJournalEntitesToDto(List<DocJournal> dj){
+        if (CollectionUtils.isEmpty(dj)) return new ArrayList<>();
+        List<DocJournalDto> res = new ArrayList<>();
+        dj.forEach(ent -> {
+            if(ent != null) res.add(new DocJournalDto(ent.getDocJournalId().getDocId(), ent.getDocJournalId().getJournalId()));
+        });
+        return res;
     }
 }
