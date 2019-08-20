@@ -22,7 +22,7 @@ for rowidx, row in enumerate(x.iterrows()):
      technical_issues, fewpubs, comments, category, possible_categories = row[1].values
 
     # preprocess
-    topic_label, category = [x.strip() for x in [topic_label, category]]
+    topic_label, category = [x.strip().replace("'", "''") for x in [topic_label, category]]
     category = drop_numeric(category)
     if topicid not in topics:
         topics[topicid] = {}
@@ -52,17 +52,16 @@ columns ="topicid label category curator experimentid".split()
 curator = "PPMI"
 experimentid = "JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay"
 
-sql = "insert into {}({}) values\n(\n".format(table, ",".join(columns))
+sql = "insert into {}({}) values \n".format(table, ",".join(columns))
 values = []
 for t in topics:
     l, c = topics[t]["label"], topics[t]["category"]
     values.append("({}, '{}', '{}', '{}', '{}')".format(t, l, c, curator, experimentid))
 sql += ",\n".join(values)
-sql += "\n)\n"
+sql += "\n"
 
 print(sql)
 outfile = "insert_curation_{}_{}.sql".format(experimentid, curator)
 print("Writing to", outfile)
 with open(outfile, "w") as f:
     f.write(sql)
-
