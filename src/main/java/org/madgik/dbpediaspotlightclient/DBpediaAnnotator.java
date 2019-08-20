@@ -429,6 +429,8 @@ public class DBpediaAnnotator {
         DBpediaAnnotator c = new DBpediaAnnotator();
         logger.info("DBPedia annotation started");
         c.getPropValues(null);
+
+
         logger.info("DBPedia annotation: Annotate new publications");
         c.annotatePubs(ExperimentType.PubMed, AnnotatorType.spotlight);
         //logger.info("DBPedia annotation: Get extra fields from DBPedia");
