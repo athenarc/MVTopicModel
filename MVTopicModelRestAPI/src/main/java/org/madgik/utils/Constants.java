@@ -24,6 +24,7 @@ public class Constants {
     public static final String MAPPER_SERVICE = "mapperService";
     public static final String VISUALIZATION_DOCUMENT_SERVICE = "visualizationDocumentService";
     public static final String TOPIC_CURATION_SERVICE = "topicCurationService";
+    public static final String CURATION_DETAILS_SERVICE = "curationDetailsService";
     public static final String TOPIC_SERVICE = "topicService";
     public static final String VISUALIZATION_EXPERIMENT_SERVICE = "visualizationExperimentService";
     public static final String DOC_TOPIC_SERVICE = "docTopicService";

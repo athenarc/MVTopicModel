@@ -40,6 +40,9 @@ public class TopicModelController {
     private TopicCurationService topicCurationService;
 
     @Autowired
+    private CurationDetailsService curationDetailsService;
+
+    @Autowired
     private TopicService topicService;
 
     @Autowired
@@ -105,6 +108,19 @@ public class TopicModelController {
             logger.error(e.getMessage());
         }
     }
+
+
+    @RequestMapping(value = "/curationDetails", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+
+    @ResponseBody
+    public List<CurationDetailsDto> getCurationDetails(@RequestParam("experimentId") String experimentId){
+        if (experimentId == null || experimentId.isEmpty())
+            experimentId = "JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay";
+        return curationDetailsService.findByExperimentId(experimentId);
+    }
+
+
+
 
    @RequestMapping(value = "/topicDocuments", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
    @ResponseBody

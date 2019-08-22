@@ -193,4 +193,14 @@ public class MapperService {
         });
         return res;
     }
+
+
+    public List<CurationDetailsDto> convertCurationDetailsToDto(List<CurationDetails> cd){
+        List<CurationDetailsDto> res = new ArrayList<>();
+       cd.forEach(ent ->{
+           if (ent != null) res.add(new CurationDetailsDto(ent.getCurationDetailsId().getExperimentId(), ent.getCurationDetailsId().getTopicId(),
+                   ent.getLabel(), ent.getCategory(), ent.getCurationDetailsId().getCurator()));
+       });
+       return res;
+    }
 }
