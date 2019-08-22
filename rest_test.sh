@@ -1,5 +1,5 @@
 endpoint="localhost:8080/mvtm_api"
-endpoint="localhost:8080/MVTopicModelRestAPI_war"
+# endpoint="localhost:8080/MVTopicModelRestAPI_war"
 
 # test topic Documents
 echo "Testing topic documents fetching"
@@ -20,3 +20,8 @@ echo "Testing topic docs per journal fetching"
 echo
 echo "${endpoint}/topicDocsPerJournal?topicId=20&experimentId=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&pageNumber=0&pageSize=15&sortOrder=sort&filter=filt"
 curl "${endpoint}/topicDocsPerJournal?topicId=20&experimentId=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&pageNumber=0&pageSize=15&sortOrder=sort&filter=filt" | jq .
+
+
+echo "Testing curation details fetching"
+echo "${endpoint}/curationDetails?experimentId=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay"
+curl "${endpoint}/curationDetails?experimentId=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay"
