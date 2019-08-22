@@ -203,4 +203,13 @@ public class MapperService {
        });
        return res;
     }
+
+    public List<TopicSimilarityDto> convertTopicSimilarityToDto(List<TopicSimilarity> ts){
+        List<TopicSimilarityDto> res = new ArrayList<>();
+        ts.forEach(ent ->{
+            if(ent!=null) res.add(new TopicSimilarityDto(ent.getTopicSimilarityId().getExperimentId1(), ent.getTopicSimilarityId().getTopicId1(),
+                   ent.getTopicSimilarityId().getExperimentId2(), ent.getTopicSimilarityId().getTopicId2(), ent.getSimilarity() ));
+        });
+        return res;
+    }
 }

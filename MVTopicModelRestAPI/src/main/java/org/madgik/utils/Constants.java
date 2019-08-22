@@ -16,6 +16,7 @@ public class Constants {
     public static final String MADGIK_PACKAGE = "org.madgik";
 
     /** Services **/
+    public static final String TOPIC_SIMILARITY_SERVICE = "topicSimilarityService";
     public static final String DATASOURCE = "dataSource";
     public static final String TRANSACTION_MANAGER = "transactionManager";
     public static final String ENTITY_MANAGER_FACTORY = "entityManagerFactory";

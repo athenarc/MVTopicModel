@@ -5,6 +5,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
 import org.madgik.dtos.*;
 import org.madgik.io.SQLTMDataSource;
+import org.madgik.persistence.entities.TopicSimilarity;
 import org.madgik.rest.requests.DocumentInfoRequest;
 import org.madgik.rest.requests.PageableRequest;
 import org.madgik.rest.requests.TopicCurationRequest;
@@ -41,6 +42,9 @@ public class TopicModelController {
 
     @Autowired
     private CurationDetailsService curationDetailsService;
+
+    @Autowired
+    private TopicSimilarityService topicSimilarityService;
 
     @Autowired
     private TopicService topicService;
@@ -111,14 +115,22 @@ public class TopicModelController {
 
 
     @RequestMapping(value = "/curationDetails", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-
-    @ResponseBody
     public List<CurationDetailsDto> getCurationDetails(@RequestParam("experimentId") String experimentId){
         if (experimentId == null || experimentId.isEmpty())
             experimentId = "JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay";
         return curationDetailsService.findByExperimentId(experimentId);
     }
 
+    @RequestMapping(value = "/topicSimilarity", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public List<TopicSimilarityDto> getTopicSimilarity(@RequestParam("experimentId1") String experimentId1,
+                                                       @RequestParam("experimentId2") String experimentId2){
+        if (experimentId1 == null || experimentId1.isEmpty())
+            experimentId1 = "JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay";
+        if (experimentId2 == null || experimentId2.isEmpty())
+            experimentId2 = "HEALTHTenderPM_500T_600IT_7000CHRs_10.0 3.0E-4_2.0E-4PRN50B_4M_4TH_cosOneWay";
+        return topicSimilarityService.findByExperimentIds(experimentId1, experimentId2);
+    }
 
 
 
