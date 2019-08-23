@@ -8,7 +8,7 @@ document_visuzalized_details_query="queries/documentVisualizationInfo.sql"
 
   
 tomcat_path="tomcat"
-tomcat_url="https://www-us.apache.org/dist/tomcat/tomcat-8/v8.5.42/bin/apache-tomcat-8.5.42.tar.gz"
+tomcat_url="https://www-eu.apache.org/dist/tomcat/tomcat-8/v8.5.45/bin/apache-tomcat-8.5.45.tar.gz"
 endpoint_name="mvtm_api"
 ip_address="$(hostname --ip-address| sed 's/ //')" # the hostname command produces a trailing whitespace
 
@@ -19,10 +19,13 @@ if [ ! -f "${tomcat_path}/bin/startup.sh" ]; then
 	zipped="$(basename ${tomcat_url})"
 	unzipped="$(basename ${zipped} .tar.gz)"
 	echo "Installing tomcat from ${tomcat_url} to ${tomcat_path}"
+	echo "Fetching..."
 	wget -q "${tomcat_url}" 
 	
 	if [ -z "${zipped}" ] || [ !  -f "${zipped}" ]; then echo "Can't fetch tomcat from the web."; exit 1; fi
 
+
+	echo "Untarring..."
 	cd "${tomcat_path}" && mv "../${zipped}" ./ &&  tar xzf "${zipped}" \
 		&& mv "${unzipped}"/* ./ && rm -r "${unzipped}" ${zipped} \
 		&& cd "${cwd}"
@@ -34,14 +37,14 @@ else
 fi
 
 # modify restful pom
-echo "Assumes property paths are set"
+# echo "Assumes property paths are set"
 # sed -i "s|<pom.model.path>.*|<pom.model.path>${trained_model_path}</pom.model.path>|" MVTopicModelRestAPI/pom.xml
 
 # build and copy the war
 echo "Building"
 mvn clean package -D skipTests=True
 echo "Registering tomcat war as ${endpoint_name}"
-cp MVTopicModelRestAPI/target/MVTopicModelRestAPI.war "${tomcat_path}/webapps/${endpoint_name}.war"
+cp MVTopicModelRestAPI/target/mvtm_api.war "${tomcat_path}/webapps/${endpoint_name}.war"
 
 # tomcat
 cp "${HOME}/.m2/repository/org/postgresql/postgresql/42.1.1.jre7/postgresql-42.1.1.jre7.jar" "${tomcat_path}/lib/"

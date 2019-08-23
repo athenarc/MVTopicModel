@@ -1,6 +1,6 @@
 package org.madgik.dtos;
 
-public class TopicSimilarityDto extends AbstractDto{
+public class TopicSimilarityDto extends ParentDto{
     String experimentId1;
     Integer topicId1;
     String experimentId2;

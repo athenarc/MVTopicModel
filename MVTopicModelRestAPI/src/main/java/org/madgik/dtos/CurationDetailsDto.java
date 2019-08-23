@@ -1,6 +1,6 @@
 package org.madgik.dtos;
 
-public class CurationDetailsDto extends AbstractDto{
+public class CurationDetailsDto extends ParentDto{
 
 
     public CurationDetailsDto(String experimentId, Integer topicId, String label, String category, String curator) {

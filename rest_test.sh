@@ -1,5 +1,10 @@
 endpoint="localhost:8080/mvtm_api"
 
+echo "Hello'ing"
+echo "${endpoint}/hello"
+curl "${endpoint}/hello"
+
+echo 
 # test topic Documents
 echo "Testing topic documents fetching"
 echo
@@ -27,5 +32,5 @@ curl "${endpoint}/curationDetails?experimentId=JuneRun_PubMed_500T_550IT_7000CHR
 
 
 echo "Testing topic similarity fetching"
-echo "${endpoint}/topicSimilarity?experimentId1=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay"
+echo "${endpoint}/topicSimilarity?experimentId1=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&experimentId2="
 curl "${endpoint}/topicSimilarity?experimentId1=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&experimentId2=" | jq .
