@@ -47,5 +47,5 @@ echo "${endpoint}/topicSimilarity?experimentId1=JuneRun_PubMed_500T_550IT_7000CH
 curl "${endpoint}/topicSimilarity?experimentId1=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&experimentId2=" | jq .
 
 echo "Testing curation categories per topic fetching"
-echo "${endpoint}/curationCategoriesPerTopic?experimentId1=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&experimentId2="
-curl "${endpoint}/curationCategoriesPerTopic?experimentId1=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&experimentId2="
+echo "${endpoint}/curationCategoriesPerTopic?experimentId=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay"
+curl "${endpoint}/curationCategoriesPerTopic?experimentId=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay"

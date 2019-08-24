@@ -14,9 +14,9 @@ public interface TopicSimilarityRepository extends JpaRepository<TopicSimilarity
 
 
     @Query("select ts from TopicSimilarity ts where ts.topicSimilarityId.experimentId1 = :experimentId1 and ts.topicSimilarityId.experimentId2 = :experimentId2")
-    List<TopicSimilarity> findAllByExperimentIds_left(@Param("experimentId1") String experimentId1, @Param("experimentId2") String experimentId2);
+    List<TopicSimilarity> findAllByExperimentIds_forward(@Param("experimentId1") String experimentId1, @Param("experimentId2") String experimentId2);
 
     @Query("select ts from TopicSimilarity ts where ts.topicSimilarityId.experimentId1 = :experimentId2 and  ts.topicSimilarityId.experimentId2 = :experimentId1 ")
-    List<TopicSimilarity> findAllByExperimentIds_right(@Param("experimentId1") String experimentId1, @Param("experimentId2") String experimentId2);
+    List<TopicSimilarity> findAllByExperimentIds_backward(@Param("experimentId1") String experimentId1, @Param("experimentId2") String experimentId2);
 
 }
