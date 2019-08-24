@@ -1,5 +1,7 @@
 package org.madgik.dtos;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 public class CurationDetailsDto extends ParentDto{
 
 
@@ -51,6 +53,7 @@ public class CurationDetailsDto extends ParentDto{
         this.experimentId = experimentId;
     }
 
+    @JsonIgnore
     String experimentId;
     Integer topicId;
     String label;

@@ -4,18 +4,29 @@ echo "Hello'ing"
 echo "${endpoint}/hello"
 curl "${endpoint}/hello"
 
+# print all for selective testing
+echo
+echo "curl \"${endpoint}/topicDocuments?topicId=20&experimentId=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&pageNumber=0&pageSize=15&sortOrder=sort&filter=filt&maxNumDocuments=10\""
+echo "curl \"${endpoint}/topicDocuments?topicId=20&experimentId=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&pageNumber=0&pageSize=55&sortOrder=sort&filter=filt&maxNumDocuments=10&journal=Nature\""
+echo "curl \"${endpoint}/topicDocsPerJournal?topicId=20&experimentId=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&pageNumber=0&pageSize=15&sortOrder=sort&filter=filt\""
+echo "curl \"${endpoint}/curationDetails?experimentId=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay\""
+echo "curl \"${endpoint}/topicSimilarity?experimentId1=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&experimentId2=\""
+echo "curl \"${endpoint}/curationCategoriesPerTopic?experimentId1=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&experimentId2=\""
+[ "$1" == "tell" ] && exit 0
+echo
+
 echo 
 # test topic Documents
 echo "Testing topic documents fetching"
 echo
 echo "${endpoint}/topicDocuments?topicId=20&experimentId=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&pageNumber=0&pageSize=15&sortOrder=sort&filter=filt&maxNumDocuments=10"
-# curl "${endpoint}/topicDocuments?topicId=20&experimentId=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&pageNumber=0&pageSize=15&sortOrder=sort&filter=filt&maxNumDocuments=10&journal=" > topicdocs.json && cat topicdocs.json | jq .
+curl "${endpoint}/topicDocuments?topicId=20&experimentId=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&pageNumber=0&pageSize=15&sortOrder=sort&filter=filt&maxNumDocuments=10&journal=" > topicdocs.json && cat topicdocs.json | jq .
 
 # test topic Documents for journal
 echo "Testing topic documents fetching in a journal"
 echo
 echo "${endpoint}/topicDocuments?topicId=20&experimentId=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&pageNumber=0&pageSize=55&sortOrder=sort&filter=filt&maxNumDocuments=10&journal=Nature"
-# curl "${endpoint}/topicDocuments?topicId=20&experimentId=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&pageNumber=0&pageSize=55&sortOrder=sort&filter=filt&maxNumDocuments=10&journal=Nature" > topic_journal_docs.json && cat topic_journal_docs.json | jq .
+curl "${endpoint}/topicDocuments?topicId=20&experimentId=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&pageNumber=0&pageSize=55&sortOrder=sort&filter=filt&maxNumDocuments=10&journal=Nature" > topic_journal_docs.json && cat topic_journal_docs.json | jq .
 
 
 echo
@@ -34,3 +45,7 @@ curl "${endpoint}/curationDetails?experimentId=JuneRun_PubMed_500T_550IT_7000CHR
 echo "Testing topic similarity fetching"
 echo "${endpoint}/topicSimilarity?experimentId1=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&experimentId2="
 curl "${endpoint}/topicSimilarity?experimentId1=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&experimentId2=" | jq .
+
+echo "Testing curation categories per topic fetching"
+echo "${endpoint}/curationCategoriesPerTopic?experimentId1=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&experimentId2="
+curl "${endpoint}/curationCategoriesPerTopic?experimentId1=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&experimentId2="

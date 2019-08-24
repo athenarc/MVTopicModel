@@ -114,6 +114,15 @@ public class TopicModelController {
     }
 
 
+    @RequestMapping(value = "/curationCategoriesPerTopic", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+    public CurationTopicsCategories getCurationCategoriesPerTopic(@RequestParam("experimentId") String experimentId){
+        if (experimentId == null || experimentId.isEmpty())
+            experimentId = "JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay";
+        return curationDetailsService.mapToCategoriesPerTopic(curationDetailsService.findByExperimentId(experimentId));
+    }
+
+
+
     @RequestMapping(value = "/curationDetails", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
     public List<CurationDetailsDto> getCurationDetails(@RequestParam("experimentId") String experimentId){
         if (experimentId == null || experimentId.isEmpty())

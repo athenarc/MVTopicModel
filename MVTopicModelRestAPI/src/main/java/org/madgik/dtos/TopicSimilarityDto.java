@@ -1,8 +1,12 @@
 package org.madgik.dtos;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 public class TopicSimilarityDto extends ParentDto{
+    @JsonIgnore
     String experimentId1;
     Integer topicId1;
+    @JsonIgnore
     String experimentId2;
     Integer topicId2;
 

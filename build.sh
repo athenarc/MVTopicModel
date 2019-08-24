@@ -42,7 +42,7 @@ fi
 
 # build and copy the war
 echo "Building"
-mvn clean package -D skipTests=True
+mvn -q clean package -D skipTests=True
 echo "Registering tomcat war as ${endpoint_name}"
 cp MVTopicModelRestAPI/target/mvtm_api.war "${tomcat_path}/webapps/${endpoint_name}.war"
 
