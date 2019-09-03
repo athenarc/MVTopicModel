@@ -133,12 +133,26 @@ public class TopicModelController {
     @RequestMapping(value = "/topicSimilarity", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public List<TopicSimilarityDto> getTopicSimilarity(@RequestParam("experimentId1") String experimentId1,
-                                                       @RequestParam("experimentId2") String experimentId2){
+                                                       @RequestParam("experimentId2") String experimentId2,
+                                                       @RequestParam("topics") String topics){
         if (experimentId1 == null || experimentId1.isEmpty())
             experimentId1 = "JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay";
         if (experimentId2 == null || experimentId2.isEmpty())
             experimentId2 = "HEALTHTenderPM_500T_600IT_7000CHRs_10.0 3.0E-4_2.0E-4PRN50B_4M_4TH_cosOneWay";
-        return topicSimilarityService.findByExperimentIds(experimentId1, experimentId2);
+        ArrayList<Integer> topicsList = new ArrayList<>();
+        if (topics != null){
+            for (String topic : topics.split(",")) {
+                try {
+                    topicsList.add(Integer.parseInt(topic));
+                }catch(NumberFormatException ex){
+
+                    logger.info(String.format("Cannot parse topicid: %s, which came from topic list %s",
+                            topic, topics));
+                    return null;
+                }
+            }
+        }
+        return topicSimilarityService.findByExperimentIdsAndTopicIds(experimentId1, experimentId2, topicsList);
     }
 
 

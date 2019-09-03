@@ -7,6 +7,7 @@ import org.madgik.utils.Constants;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service(Constants.TOPIC_SIMILARITY_SERVICE)
@@ -37,5 +38,16 @@ public class TopicSimilarityService {
 
         return mapperService.convertTopicSimilarityToDto(ts);
 
+    }
+
+    public List<TopicSimilarityDto> findByExperimentIdsAndTopicIds(String experimentId1, String experimentId2, List<Integer> topicIds){
+
+        List<TopicSimilarityDto> all =  findByExperimentIds(experimentId1,experimentId2);
+        List<TopicSimilarityDto> res =  new ArrayList<>();
+        for (TopicSimilarityDto ts: all){
+            if (topicIds.contains(ts.getTopicId1()) || topicIds.contains(ts.getTopicId2()))
+                res.add(ts);
+        }
+        return res;
     }
 }
