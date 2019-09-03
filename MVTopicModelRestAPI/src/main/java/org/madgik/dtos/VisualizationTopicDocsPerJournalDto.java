@@ -9,8 +9,6 @@ public class VisualizationTopicDocsPerJournalDto extends ParentDto {
     private Integer topicId;
     @JsonIgnore
     private String experimentId;
-    @JsonIgnore
-    private String journalId;
 
     private Integer count;
     private String journalTitle;
@@ -29,10 +27,9 @@ public class VisualizationTopicDocsPerJournalDto extends ParentDto {
 
     }
 
-    public VisualizationTopicDocsPerJournalDto(Integer topicId, String experimentId, String journalId, Integer count, String journalTitle, Integer docTopicCount) {
+    public VisualizationTopicDocsPerJournalDto(Integer topicId, String experimentId, Integer count, String journalTitle, Integer docTopicCount) {
         this.topicId = topicId;
         this.experimentId = experimentId;
-        this.journalId = journalId;
         this.count = count;
         this.journalTitle = journalTitle;
         this.docTopicCount = docTopicCount;
@@ -52,14 +49,6 @@ public class VisualizationTopicDocsPerJournalDto extends ParentDto {
 
     public void setExperimentId(String experimentId) {
         this.experimentId = experimentId;
-    }
-
-    public String getJournalId() {
-        return journalId;
-    }
-
-    public void setJournalId(String journalId) {
-        this.journalId = journalId;
     }
 
     public Integer getCount() {
@@ -84,13 +73,12 @@ public class VisualizationTopicDocsPerJournalDto extends ParentDto {
         if (o == null || getClass() != o.getClass()) return false;
         VisualizationTopicDocsPerJournalDto that = (VisualizationTopicDocsPerJournalDto) o;
         return topicId.equals(that.topicId) &&
-                experimentId.equals(that.experimentId) &&
-                journalId.equals(that.journalId);
+                experimentId.equals(that.experimentId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(topicId, experimentId, journalId);
+        return Objects.hash(topicId, experimentId);
     }
 
     @Override
@@ -98,7 +86,6 @@ public class VisualizationTopicDocsPerJournalDto extends ParentDto {
         return "VisualizationTopicDocsPerJournalDto{" +
                 "topicId=" + topicId +
                 ", experimentId='" + experimentId + '\'' +
-                ", journalId='" + journalId + '\'' +
                 ", count=" + count +
                 ", journalTitle='" + journalTitle + '\'' +
                 ", docTopicCount='" + docTopicCount + '\'' +

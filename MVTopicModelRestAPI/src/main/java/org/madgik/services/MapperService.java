@@ -149,10 +149,9 @@ public class MapperService {
         if (entity.getVisualizationTopicDocsPerJournalId() != null) {
             dto.setTopicId(entity.getVisualizationTopicDocsPerJournalId().getTopicId());
             dto.setExperimentId(entity.getVisualizationTopicDocsPerJournalId().getExperimentId());
-            dto.setJournalId(entity.getVisualizationTopicDocsPerJournalId().getJournalId());
         }
         dto.setCount(entity.getCount());
-        dto.setJournalTitle(entity.getJournalTitle());
+        dto.setJournalTitle(entity.getVisualizationTopicDocsPerJournalId().getJournalTitle());
         dto.setDocTopicCount(entity.getDocTopicCount());
         return dto;
     }
@@ -160,10 +159,9 @@ public class MapperService {
     public VisualizationTopicDocsPerJournal convertVisualizationTopicDocsPerJournalDtoToEntity(VisualizationTopicDocsPerJournalDto dto) {
         if (dto == null) return null;
         VisualizationTopicDocsPerJournal entity = new VisualizationTopicDocsPerJournal();
-        VisualizationTopicDocsPerJournalId id = new VisualizationTopicDocsPerJournalId(dto.getTopicId(), dto.getExperimentId(), dto.getJournalId());
+        VisualizationTopicDocsPerJournalId id = new VisualizationTopicDocsPerJournalId(dto.getTopicId(), dto.getExperimentId(), dto.getJournalTitle());
         entity.setVisualizationTopicDocsPerJournalId(id);
         entity.setCount(dto.getCount());
-        entity.setJournalTitle(dto.getJournalTitle());
         entity.setDocTopicCount(dto.getDocTopicCount());
         return entity;
     }

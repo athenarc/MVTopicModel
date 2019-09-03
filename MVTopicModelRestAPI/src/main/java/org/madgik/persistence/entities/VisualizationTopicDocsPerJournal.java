@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Objects;
 
 @Entity
-@Table(name = "visualization_topic_docs_per_journal")
+@Table(name = "visualization_docs_per_topic_per_journal")
 @DynamicUpdate
 public class VisualizationTopicDocsPerJournal implements Serializable {
 
@@ -17,8 +17,6 @@ public class VisualizationTopicDocsPerJournal implements Serializable {
     private VisualizationTopicDocsPerJournalId visualizationTopicDocsPerJournalId;
     @Column(name = "count")
     private Integer count;
-    @Column(name = "journaltitle")
-    private String journalTitle;
 
     public Integer getDocTopicCount() {
         return docTopicCount;
@@ -35,10 +33,9 @@ public class VisualizationTopicDocsPerJournal implements Serializable {
 
     }
 
-    public VisualizationTopicDocsPerJournal(VisualizationTopicDocsPerJournalId visualizationTopicDocsPerJournalId, Integer count, String journalTitle, Integer docTopicCount) {
+    public VisualizationTopicDocsPerJournal(VisualizationTopicDocsPerJournalId visualizationTopicDocsPerJournalId, Integer count, Integer docTopicCount) {
         this.visualizationTopicDocsPerJournalId = visualizationTopicDocsPerJournalId;
         this.count = count;
-        this.journalTitle = journalTitle;
         this.docTopicCount = docTopicCount;
     }
 
@@ -56,14 +53,6 @@ public class VisualizationTopicDocsPerJournal implements Serializable {
 
     public void setCount(Integer count) {
         this.count = count;
-    }
-
-    public String getJournalTitle() {
-        return journalTitle;
-    }
-
-    public void setJournalTitle(String journalTitle) {
-        this.journalTitle = journalTitle;
     }
 
     @Override
@@ -84,7 +73,6 @@ public class VisualizationTopicDocsPerJournal implements Serializable {
         return "VisualizationTopicDocsPerJournal{" +
                 "visualizationTopicDocsPerJournalId=" + visualizationTopicDocsPerJournalId +
                 ", count=" + count +
-                ", journalTitle='" + journalTitle + '\'' +
                 '}';
     }
 }

@@ -11,17 +11,17 @@ public class VisualizationTopicDocsPerJournalId implements Serializable {
     private Integer topicId;
     @Column(name = "experimentid")
     private String experimentId;
-    @Column(name = "journalid")
-    private String journalId;
+    @Column(name = "journaltitle")
+    private String journalTitle;
 
     public VisualizationTopicDocsPerJournalId() {
 
     }
 
-    public VisualizationTopicDocsPerJournalId(Integer topicId, String experimentId, String journalId) {
+    public VisualizationTopicDocsPerJournalId(Integer topicId, String experimentId, String journalTitle) {
         this.topicId = topicId;
         this.experimentId = experimentId;
-        this.journalId = journalId;
+        this.journalTitle = journalTitle;
     }
 
     public Integer getTopicId() {
@@ -40,12 +40,12 @@ public class VisualizationTopicDocsPerJournalId implements Serializable {
         this.experimentId = experimentId;
     }
 
-    public String getJournalId() {
-        return journalId;
+    public String getJournalTitle() {
+        return journalTitle;
     }
 
-    public void setJournalId(String journalId) {
-        this.journalId = journalId;
+    public void setJournalTitle(String journalTitle) {
+        this.journalTitle = journalTitle;
     }
 
     @Override
@@ -53,7 +53,7 @@ public class VisualizationTopicDocsPerJournalId implements Serializable {
         return "VisualizationTopicDocsPerJournalId{" +
                 "topicId=" + topicId +
                 ", experimentId='" + experimentId + '\'' +
-                ", journalId='" + journalId + '\'' +
+                ", journalTitle='" + journalTitle + '\'' +
                 '}';
     }
 }
