@@ -22,20 +22,21 @@ public class TopicSimilarityService {
     public List<TopicSimilarityDto> findByExperimentIds(String experimentId1, String experimentId2){
 
         List<TopicSimilarity> ts =repo.findAllByExperimentIds_forward(experimentId1,experimentId2);
-        List<TopicSimilarity> ts_back =repo.findAllByExperimentIds_backward(experimentId1,experimentId2);
-        for(TopicSimilarity tt : ts_back){
-            // swap'em
-            Integer t = tt.getTopicSimilarityId().getTopicId1();
-            tt.getTopicSimilarityId().setTopicId1(tt.getTopicSimilarityId().getTopicId2());
-            tt.getTopicSimilarityId().setTopicId2(t);
+        if ( ! experimentId1.equals(experimentId2)) {
+            List<TopicSimilarity> ts_back = repo.findAllByExperimentIds_backward(experimentId1, experimentId2);
+            for (TopicSimilarity tt : ts_back) {
+                // swap'em
+                Integer t = tt.getTopicSimilarityId().getTopicId1();
+                tt.getTopicSimilarityId().setTopicId1(tt.getTopicSimilarityId().getTopicId2());
+                tt.getTopicSimilarityId().setTopicId2(t);
 
-            String s = tt.getTopicSimilarityId().getExperimentId1();
-            tt.getTopicSimilarityId().setExperimentId1(tt.getTopicSimilarityId().getExperimentId2());
-            tt.getTopicSimilarityId().setExperimentId2(s);
+                String s = tt.getTopicSimilarityId().getExperimentId1();
+                tt.getTopicSimilarityId().setExperimentId1(tt.getTopicSimilarityId().getExperimentId2());
+                tt.getTopicSimilarityId().setExperimentId2(s);
 
-            if (! ts.contains(tt)) ts.add(tt);
+                if (!ts.contains(tt)) ts.add(tt);
+            }
         }
-
         return mapperService.convertTopicSimilarityToDto(ts);
 
     }
@@ -45,7 +46,7 @@ public class TopicSimilarityService {
         List<TopicSimilarityDto> all =  findByExperimentIds(experimentId1,experimentId2);
         List<TopicSimilarityDto> res =  new ArrayList<>();
         for (TopicSimilarityDto ts: all){
-            if (topicIds.contains(ts.getTopicId1()) || topicIds.contains(ts.getTopicId2()))
+            if (topicIds.contains(ts.getTopicId1()) && topicIds.contains(ts.getTopicId2()))
                 res.add(ts);
         }
         return res;

@@ -135,12 +135,13 @@ public class TopicModelController {
     public List<TopicSimilarityDto> getTopicSimilarity(@RequestParam("experimentId1") String experimentId1,
                                                        @RequestParam("experimentId2") String experimentId2,
                                                        @RequestParam("topics") String topics){
+        List<TopicSimilarityDto> res = null;
         if (experimentId1 == null || experimentId1.isEmpty())
             experimentId1 = "JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay";
         if (experimentId2 == null || experimentId2.isEmpty())
             experimentId2 = "HEALTHTenderPM_500T_600IT_7000CHRs_10.0 3.0E-4_2.0E-4PRN50B_4M_4TH_cosOneWay";
         ArrayList<Integer> topicsList = new ArrayList<>();
-        if (topics != null){
+        if (topics != null && !  topics.isEmpty()){
             for (String topic : topics.split(",")) {
                 try {
                     topicsList.add(Integer.parseInt(topic));
@@ -151,10 +152,16 @@ public class TopicModelController {
                     return null;
                 }
             }
-            return topicSimilarityService.findByExperimentIdsAndTopicIds(experimentId1, experimentId2, topicsList);
+            res =  topicSimilarityService.findByExperimentIdsAndTopicIds(experimentId1, experimentId2, topicsList);
+            logger.info(String.format("Returning non-all topics, eg %d items.", res.size()));
         }
-        // return all topics
-        return topicSimilarityService.findByExperimentIds(experimentId1, experimentId2);
+        else {
+            // return all topics
+            res = topicSimilarityService.findByExperimentIds(experimentId1, experimentId2);
+            logger.info(String.format("Returning all topics, eg %d items.", res.size()));
+        }
+
+        return res;
     }
 
 

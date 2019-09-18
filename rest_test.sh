@@ -10,7 +10,8 @@ echo "curl \"${endpoint}/topicDocuments?topicId=20&experimentId=JuneRun_PubMed_5
 echo "curl \"${endpoint}/topicDocuments?topicId=20&experimentId=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&pageNumber=0&pageSize=55&sortOrder=sort&filter=filt&maxNumDocuments=10&journal=Nature\""
 echo "curl \"${endpoint}/topicDocsPerJournal?topicId=20&experimentId=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&pageNumber=0&pageSize=15&sortOrder=sort&filter=filt\""
 echo "curl \"${endpoint}/curationDetails?experimentId=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay\""
-echo "curl \"${endpoint}/topicSimilarity?experimentId1=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&experimentId2=\""
+echo "curl \"${endpoint}/topicSimilarity?experimentId1=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&experimentId2=&experimentId2=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay\""
+echo "curl \"${endpoint}/topicSimilarity?experimentId1=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&experimentId2=&topics=1,2,3\""
 echo "curl \"${endpoint}/curationCategoriesPerTopic?experimentId1=JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay&experimentId2=\""
 [ "$1" == "tell" ] && exit 0
 echo
