@@ -151,8 +151,10 @@ public class TopicModelController {
                     return null;
                 }
             }
+            return topicSimilarityService.findByExperimentIdsAndTopicIds(experimentId1, experimentId2, topicsList);
         }
-        return topicSimilarityService.findByExperimentIdsAndTopicIds(experimentId1, experimentId2, topicsList);
+        // return all topics
+        return topicSimilarityService.findByExperimentIds(experimentId1, experimentId2);
     }
 
 
