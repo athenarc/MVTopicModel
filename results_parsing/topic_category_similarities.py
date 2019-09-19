@@ -1,11 +1,15 @@
 import json
+import sys
 
 import numpy as np
 from matplotlib import pyplot as plt
 
+input_json = sys.argv[1]
+categ = sys.argv[2] if len(sys.argv) > 2 else None
+
 # read topic similarity responses
 print("Reading json")
-with open("all.json") as f:
+with open(input_json) as f:
     data = json.load(f)
 
 # process json into a similarity matrix 
@@ -21,7 +25,7 @@ for dat in data:
     sims[idx1][idx2] = sim
 
 
-num_categories = 1
+num_categories = 5
 threshold = 0.8
 np.random.seed(1234)
 boolean_sims = np.array(sims>threshold).astype(np.int32)
@@ -46,3 +50,6 @@ for cat in categories:
         category_sims[cat, other_cat] = np.sum(boolean_sims[curr_cat_rows][:,other_cat_cols])
 
 print(category_sims)
+# write to json
+with open("category_similarities_num_{}.json".format(num_categories), "w") as f:
+    json.dump(category_sims.tolist(), f)
