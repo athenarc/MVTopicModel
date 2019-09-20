@@ -16,8 +16,8 @@ with open(input_json) as f:
 topicids = set([d['topicId1'] for d in data] + [d['topicId2'] for d in data])
 
 num_items = len(topicids)
-sims = np.random.random((num_items, num_items))
 sorted_ids = sorted(topicids)
+sims = np.zeros((num_items, num_items), np.float32)
 
 for dat in data:
     t1, t2, sim = dat['topicId1'], dat['topicId2'], dat['similarity']
@@ -25,8 +25,8 @@ for dat in data:
     sims[idx1][idx2] = sim
 
 
-num_categories = 5
-threshold = 0.8
+num_categories = 1
+threshold = 0.7
 np.random.seed(1234)
 boolean_sims = np.array(sims>threshold).astype(np.int32)
 

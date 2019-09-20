@@ -45,6 +45,8 @@ public class TopicModelController {
 
     @Autowired
     private TopicSimilarityService topicSimilarityService;
+    @Autowired
+    private TopicCategorySimilaritiesService topicCategorySimilaritiesService;
 
     @Autowired
     private TopicService topicService;
@@ -163,6 +165,21 @@ public class TopicModelController {
 
         return res;
     }
+
+
+    @RequestMapping(value = "/categorySimilarity", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public List<List<Integer>> getCategorySimilarity(@RequestParam("experimentId") String experimentId){
+        if (experimentId == null || experimentId.isEmpty())
+            experimentId = "JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay";
+
+        List<TopicSimilarityDto> res = topicSimilarityService.findByExperimentIds(experimentId, experimentId);
+        logger.info(String.format("Returning all topics, eg %d items.", res.size()));
+        return topicCategorySimilaritiesService.calculateTopicCategorySimilarity(res, null, null);
+    }
+
+
+
 
 
 
