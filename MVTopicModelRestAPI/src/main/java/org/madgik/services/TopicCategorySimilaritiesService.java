@@ -17,12 +17,12 @@ public class TopicCategorySimilaritiesService {
 
     private static final Logger logger = LoggerFactory.getLogger(TopicCategorySimilaritiesService.class);
 
-    public List<List<Integer>> calculateTopicCategorySimilarity(List<TopicSimilarityDto> topicSimilarityDtos, Integer[] assignments, Double threshold) {
+    public List<List<Integer>> calculateTopicCategorySimilarity(List<TopicSimilarityDto> topicSimilarityDtos, List<Integer> assignments, Double threshold) {
         if (CollectionUtils.isEmpty(topicSimilarityDtos)) return null;
         if (threshold == null) threshold = 0.8;
-        if (assignments == null) {
-            assignments = new Integer[topicSimilarityDtos.size()];
-            for(int i=0;i<topicSimilarityDtos.size();++i) assignments[i] = 0;
+        if (assignments == null || assignments.isEmpty()) {
+            assignments = new ArrayList<>();
+            for(int i=0;i<topicSimilarityDtos.size();++i) assignments.add(0);
         }
         List<Integer> categories = new ArrayList<>();
         for(Integer cat: assignments) if(!categories.contains(cat)) categories.add(cat);
@@ -53,7 +53,7 @@ public class TopicCategorySimilaritiesService {
             }
         }
 
-        logger.debug("Assignments: " + Arrays.toString(assignments));
+        logger.debug("Assignments: " + assignments);
         List<List<Integer>> categorySimilarities = new ArrayList<>();
         for (int i=0;i< num_categories; ++i) {
             categorySimilarities.add(new ArrayList<>());
@@ -70,10 +70,10 @@ public class TopicCategorySimilaritiesService {
         return categorySimilarities;
     }
 
-    private List<Integer> getCategoryIndices(Integer[] assignments, List<Integer>categoriesArray, int numItems, int categoryIndex) {
+    private List<Integer> getCategoryIndices(List<Integer> assignments, List<Integer>categoriesArray, int numItems, int categoryIndex) {
         List<Integer> indexOfCategory = new ArrayList<>();
         for (int ass1 = 0; ass1 < numItems; ass1++) {
-            if (assignments[ass1] == categoriesArray.get(categoryIndex)) {
+            if (assignments.get(ass1).equals(categoriesArray.get(categoryIndex))) {
                 indexOfCategory.add(ass1);
             }
         }
