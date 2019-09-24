@@ -58,8 +58,8 @@ SELECT
       FROM doc_topic
            INNER JOIN (select doc_topic.TopicId, experimentId,  
            sum(weight) AS TopicSumWeight from doc_topic 
-           -- where doc_topic.ExperimentId='JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay' 
-           where doc_topic.ExperimentId='PubMed_400T_100IT_7000CHRs_4M_Lmt_10000OneWay' 
+           where doc_topic.ExperimentId='JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay' 
+           -- where doc_topic.ExperimentId='PubMed_400T_100IT_7000CHRs_4M_Lmt_10000OneWay' 
            Group By ExperimentId, TopicID) as TopicSum 
            On TopicSum.TopicId = doc_topic.TopicId and TopicSum.ExperimentId = doc_topic.ExperimentId
            -- where doc_topic.ExperimentId='ACM_200T_500IT_5000CHRs_100B_5M_cos'
@@ -76,8 +76,8 @@ SELECT
 
   ) topicDiscr on topicDiscr.TopicId = TopicDetails.TopicId and TopicDetails.ExperimentId=topicDiscr.ExperimentId 
   
--- where coh1.ExperimentId='JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay'  
-where coh1.ExperimentId='PubMed_400T_100IT_7000CHRs_4M_Lmt_10000OneWay'  
+where coh1.ExperimentId='JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay'  
+-- where coh1.ExperimentId='PubMed_400T_100IT_7000CHRs_4M_Lmt_10000OneWay'  
 --and round(coh1.Score,2)<-150
 order by TopicDetails.TopicId
 ) as c

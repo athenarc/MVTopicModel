@@ -4,6 +4,16 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 
 public class CurationDetailsDto extends ParentDto{
 
+    @JsonIgnore
+    private String experimentId;
+    private Integer topicId;
+    private String label;
+    private String category;
+    private String curator;
+
+    public CurationDetailsDto() {
+
+    }
 
     public CurationDetailsDto(String experimentId, Integer topicId, String label, String category, String curator) {
         this.experimentId = experimentId;
@@ -53,13 +63,6 @@ public class CurationDetailsDto extends ParentDto{
         this.experimentId = experimentId;
     }
 
-    @JsonIgnore
-    String experimentId;
-    Integer topicId;
-    String label;
-    String category;
-    String curator;
-
     @Override
     public String toString() {
 
@@ -72,7 +75,5 @@ public class CurationDetailsDto extends ParentDto{
                 '}';
 
     }
-
-
 
 }

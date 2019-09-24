@@ -64,6 +64,9 @@ public class TopicModelController {
     @Autowired
     private VisualizationTopicDocsPerJournalService visualizationTopicDocsPerJournalService;
 
+    @Autowired
+    private VisualizationCurationTopicLabelsService visualizationCurationTopicLabelsService;
+
 //    @Value("${serialization.path}")
 //    private String serializationBasePath;
 //
@@ -171,14 +174,22 @@ public class TopicModelController {
     @RequestMapping(value = "/categorySimilarity", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public List<List<Integer>> getCategorySimilarity(@RequestParam("experimentId") String experimentId,
+                                                     @RequestParam("curator") String curator,
                                                     @RequestParam("threshold") Double threshold){
         if (experimentId == null || experimentId.isEmpty())
             experimentId = "JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay";
+        if (curator == null || curator.isEmpty())
+            curator = "frontend";
 
+        // get topic similarities
         List<TopicSimilarityDto> res = topicSimilarityService.findByExperimentIds(experimentId, experimentId);
-        Map<Integer, Integer> categoryAssignments = topicCategorySimilaritiesService.getTopicCategoryAssignments(res);
-        logger.info(String.format("Returning all topics, eg %d items.", res.size()));
-        return topicCategorySimilaritiesService.calculateTopicCategorySimilarity(res, categoryAssignments, threshold);
+        logger.info(String.format("Got topic similarities for all topics, eg %d items.", res.size()));
+        // get category assignments
+        VisualizationCurationTopicLabelsDto assignments = visualizationCurationTopicLabelsService.getVisualizationCurationTopicLabelsByExperimentId(experimentId, curator);
+        List<String> categories = assignments.getCategories();
+        Map<Integer,List<Integer>> topicCategoriesIdxMapping = assignments.getTopicCategoriesIdxMapping();
+
+        return topicCategorySimilaritiesService.calculateTopicCategorySimilarity(res, categories, topicCategoriesIdxMapping, threshold);
     }
 
 
