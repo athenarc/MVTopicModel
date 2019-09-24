@@ -17,31 +17,40 @@ public class TopicCategorySimilaritiesService {
 
     private static final Logger logger = LoggerFactory.getLogger(TopicCategorySimilaritiesService.class);
 
-    public List<List<Integer>> calculateTopicCategorySimilarity(List<TopicSimilarityDto> topicSimilarityDtos, List<Integer> assignments, Double threshold) {
+
+    public Map<Integer, Integer> getTopicCategoryAssignments(List<TopicSimilarityDto> topicSimilarityDtos) {
+        // get the cat. assignments from the DB
+        Map<Integer, Integer> assignments = new HashMap<>();
+        return assignments;
+    }
+
+    public List<List<Integer>> calculateTopicCategorySimilarity(List<TopicSimilarityDto> topicSimilarityDtos, Map<Integer, Integer> assignments, Double threshold) {
         if (CollectionUtils.isEmpty(topicSimilarityDtos)) return null;
         if (threshold == null) threshold = 0.8;
-        if (assignments == null || assignments.isEmpty()) {
-            assignments = new ArrayList<>();
-            for(int i=0;i<topicSimilarityDtos.size();++i) assignments.add(0);
-        }
-        List<Integer> categories = new ArrayList<>();
-        for(Integer cat: assignments) if(!categories.contains(cat)) categories.add(cat);
-        int num_categories = categories.size();
-
-
+        // collect topic ids
         Set<Integer> topicIds = topicSimilarityDtos.stream().flatMap(c -> Stream.of(c.getTopicId1(), c.getTopicId2())).collect(Collectors.toSet());
         int numItems = topicIds.size();
-        double[][] similarities = new double[numItems][numItems];
         List<Integer> topicIdsList = new ArrayList<>(topicIds);
         topicIds.clear();
         Collections.sort(topicIdsList);
-
+        // collect topic similarities
+        double[][] similarities = new double[numItems][numItems];
         for (TopicSimilarityDto dto : topicSimilarityDtos) {
             similarities[topicIdsList.indexOf(dto.getTopicId1())]
                     [topicIdsList.indexOf(dto.getTopicId2())] = dto.getSimilarity();
         }
+        // get category assignments
+        List<Integer> categories = new ArrayList<>();
+        if (assignments == null || assignments.isEmpty()) {
+            // single-category for all topics
+            assignments = new HashMap<>();
+            for(int i=0;i<topicIdsList.size();++i) assignments.put(topicIdsList.get(i), 0);
+        }
+        for(Integer cat: assignments.values()) if(!categories.contains(cat)) categories.add(cat);
+        int num_categories = categories.size();
 
 
+        // apply similarity threshold
         int[][] booleanSims = new int[numItems][numItems];
         for (int i = 0; i < numItems; i++) {
             for (int j = 0; j < numItems; j++) {
@@ -60,22 +69,23 @@ public class TopicCategorySimilaritiesService {
             for (int j = 0; j < num_categories; ++j)
                 categorySimilarities.get(j).add(0);
         }
-        for (int i = 0; i < num_categories; i++) {
-            List<Integer> indexOfCategory = getCategoryIndices(assignments, categories, numItems, i);
-            for (int j = 0; j < num_categories; j++) {
-                List<Integer> indexOfOtherCategory = getCategoryIndices(assignments, categories, numItems, j);
-                categorySimilarities.get(i).set(j, getCategorySimilaritySum(indexOfCategory, indexOfOtherCategory, booleanSims));
+
+        for (int c=0; c<categories.size(); ++c){
+            Integer category = categories.get(c);
+            List<Integer> indexOfCategory = getCategoryIndices(topicIdsList, assignments, category);
+                for (int oc=0; oc<categories.size(); ++oc){
+                    Integer otherCategory = categories.get(oc);
+                List<Integer> indexOfOtherCategory = getCategoryIndices(topicIdsList, assignments, otherCategory);
+                categorySimilarities.get(c).set(oc, getCategorySimilaritySum(indexOfCategory, indexOfOtherCategory, booleanSims));
             }
         }
         return categorySimilarities;
     }
 
-    private List<Integer> getCategoryIndices(List<Integer> assignments, List<Integer>categoriesArray, int numItems, int categoryIndex) {
+    private List<Integer> getCategoryIndices(List<Integer> topicIds, Map<Integer, Integer> assignments, int category) {
         List<Integer> indexOfCategory = new ArrayList<>();
-        for (int ass1 = 0; ass1 < numItems; ass1++) {
-            if (assignments.get(ass1).equals(categoriesArray.get(categoryIndex))) {
-                indexOfCategory.add(ass1);
-            }
+        for(int i=0;i<topicIds.size();++i){
+            if (assignments.get(topicIds.get(i)) == category) indexOfCategory.add(i);
         }
         return indexOfCategory;
     }

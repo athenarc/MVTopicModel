@@ -171,14 +171,14 @@ public class TopicModelController {
     @RequestMapping(value = "/categorySimilarity", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public List<List<Integer>> getCategorySimilarity(@RequestParam("experimentId") String experimentId,
-                                                     @RequestParam("assignments") List<Integer> assignments,
                                                     @RequestParam("threshold") Double threshold){
         if (experimentId == null || experimentId.isEmpty())
             experimentId = "JuneRun_PubMed_500T_550IT_7000CHRs_3M_OneWay";
 
         List<TopicSimilarityDto> res = topicSimilarityService.findByExperimentIds(experimentId, experimentId);
+        Map<Integer, Integer> categoryAssignments = topicCategorySimilaritiesService.getTopicCategoryAssignments(res);
         logger.info(String.format("Returning all topics, eg %d items.", res.size()));
-        return topicCategorySimilaritiesService.calculateTopicCategorySimilarity(res, assignments, threshold);
+        return topicCategorySimilaritiesService.calculateTopicCategorySimilarity(res, categoryAssignments, threshold);
     }
 
 

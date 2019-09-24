@@ -32,7 +32,8 @@ boolean_sims = np.array(sims>threshold).astype(np.int32)
 
 # assign categories
 categories = list(range(num_categories))
-assig = [np.random.choice(categories) for _ in sims]
+assig = [0 for _ in topicids]
+assign[:10] = 1
 print("Assignments:", assig)
 
 category_sims = np.zeros((num_categories, num_categories), np.int32)
