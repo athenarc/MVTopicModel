@@ -19,3 +19,4 @@ logs
 tomcat/
 test/
 *.json
+*/*/credentials.json
