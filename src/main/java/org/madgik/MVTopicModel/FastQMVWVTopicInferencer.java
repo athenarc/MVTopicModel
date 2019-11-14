@@ -34,7 +34,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 import org.apache.log4j.Logger;
-//import static org.scitopic.MVTopicModel.FastQMVWVParallelTopicModel.logger;
+//import static org.scitopic.MVTopicModel.FastQMVWVParallelTopicModel.LOGGER;
 import org.madgik.utils.FTree;
 
 import org.madgik.utils.MixTopicModelTopicAssignment;
@@ -596,14 +596,14 @@ public class FastQMVWVTopicInferencer implements Serializable {
                 connection = DriverManager.getConnection(SQLConnectionString);
                 statement = connection.createStatement();
 
-                String modelSelect = String.format("select inferencemodel from experiment "
-                        + "where ExperimentId = '%s' \n",
+                String modelSelect = String.format("select model from inferencemodel "
+                        + "where experimentid = '%s' \n",
                         experimentId);
 
                 ResultSet rs = statement.executeQuery(modelSelect);
                 while (rs.next()) {
                     try {
-                        byte b[] = (byte[]) rs.getObject("inferencemodel");
+                        byte b[] = (byte[]) rs.getObject("model");
                         ByteArrayInputStream bi = new ByteArrayInputStream(b);
                         ObjectInputStream si = new ObjectInputStream(bi);
                         topicModel = (FastQMVWVTopicInferencer) si.readObject();

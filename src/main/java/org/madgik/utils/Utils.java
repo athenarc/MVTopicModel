@@ -7,7 +7,12 @@ package org.madgik.utils;
 
 import static cc.mallet.types.MatrixOps.dotProduct;
 import static cc.mallet.types.MatrixOps.twoNorm;
+
+import org.apache.commons.lang.ArrayUtils;
 import org.knowceans.util.Vectors;
+
+import java.util.Stack;
+import java.util.concurrent.TimeUnit;
 
 /**
  *
@@ -41,6 +46,29 @@ public class Utils {
         }
 
         return ps;
+    }
+
+
+    public static Double [][] toDouble2DObject(double [][] in){
+        if (in.length ==0 ) return null;
+        Double [][]out = new Double[in.length][in[0].length];
+        for (int i=0;i<in.length;++i) out[i] = ArrayUtils.toObject(in[i]);
+        return out;
+    }
+
+
+    static Stack<Long> timestack = new Stack<>();
+    public static void tic(){
+        Utils.timestack.push(System.currentTimeMillis());
+    }
+    public static void toc(String msg){
+        long millis = System.currentTimeMillis() - Utils.timestack.pop();
+        String outmsg =  String.format("[%s] took: ", msg);
+        if (TimeUnit.MILLISECONDS.toDays(millis) > 0) outmsg += String.format(" %d days", TimeUnit.MILLISECONDS.toDays(millis));
+        if (TimeUnit.MILLISECONDS.toHours(millis) > 0) outmsg += String.format(" %d hours", TimeUnit.MILLISECONDS.toHours(millis));
+        if (TimeUnit.MILLISECONDS.toMinutes(millis) > 0) outmsg += String.format(" %d minutes", TimeUnit.MILLISECONDS.toMinutes(millis));
+        outmsg += String.format(" %d seconds", TimeUnit.MILLISECONDS.toSeconds(millis) - TimeUnit.MILLISECONDS.toSeconds(TimeUnit.MILLISECONDS.toMinutes(millis)));
+        System.out.println(outmsg);
     }
 
 }

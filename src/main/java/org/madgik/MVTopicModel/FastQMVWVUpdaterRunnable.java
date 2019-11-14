@@ -183,14 +183,14 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
                 FastQDelta delta;
                 int[] currentTypeTopicCounts;
                 for (int stId = 0; stId < nst; stId++) {
-                    //logger.info("Updater thread: processing queue["+x+"]");
+                    //LOGGER.info("Updater thread: processing queue["+x+"]");
                     while ((delta = queues.get(threadId*nst+stId).poll()) != null) {
 
                         if (delta.Modality == -1 && delta.NewTopic == -1 && delta.OldTopic == -1 && delta.Type == -1) { // thread x has finished
                             finishedSamplingTreads.add(stId);
                             isFinished = finishedSamplingTreads.size() == nst;
 
-                            //logger.info("Updater thread: worker["+stId+"] has finished");
+                            //LOGGER.info("Updater thread: worker["+stId+"] has finished");
                             continue;
                         }
 
@@ -282,7 +282,7 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
             }
 
             try {
-                logger.info("Updater thread: ["+threadId+"] has finished");
+                logger.debug("Updater thread: ["+threadId+"] has finished");
                 cyclicBarrier.await();
             } catch (InterruptedException e) {
                 System.out.println("Main Thread interrupted!");
@@ -346,13 +346,13 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
                 beta[m] = betaSum[m] / numTypes[m];
             } catch (RuntimeException e) {
                 // Dirichlet optimization has become unstable. This is known to happen for very small corpora (~5 docs).
-                logger.warn("Dirichlet optimization has become unstable:" + e.getMessage() + ". Resetting to previous Beta");
+                LOGGER.warn("Dirichlet optimization has become unstable:" + e.getMessage() + ". Resetting to previous Beta");
                 betaSum[m] = prevBetaSum;
                 beta[m] = betaSum[m] / numTypes[m];
 
             }
             //TODO: copy/update trees in threads
-            logger.info("[beta[" + m + "]: " + formatter.format(beta[m]) + "] ");
+            LOGGER.info("[beta[" + m + "]: " + formatter.format(beta[m]) + "] ");
             // Now publish the new value
             // for (int thread = 0; thread < numThreads; thread++) {
             //     runnables[thread].resetBeta(beta[0], betaSum[0]);
@@ -409,9 +409,9 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
 
                 //  }
             }
-            logger.info("GammaRoot: " + gammaRoot);
+            LOGGER.info("GammaRoot: " + gammaRoot);
             //for (byte m = 0; m < numModalities; m++) {
-            logger.info("Gamma[" + m + "]: " + gamma[m]);
+            LOGGER.info("Gamma[" + m + "]: " + gamma[m]);
             //}
         }
 
@@ -467,7 +467,7 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
                 for (int i = 0; i < inActiveTopicIndex.size(); i++) {
                     empty += formatter.format(inActiveTopicIndex.get(i)) + " ";
                 }
-                logger.info("Inactive Topics: " + empty);
+                LOGGER.info("Inactive Topics: " + empty);
             }
             //for (byte m = 0; m < numModalities; m++) {
             //alpha[m].fill(0, numTopics, 0);
@@ -487,14 +487,14 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
                 }
             }
 
-            logger.info("AlphaSum[" + m + "]: " + alphaSum[m]);
+            LOGGER.info("AlphaSum[" + m + "]: " + alphaSum[m]);
             //for (byte m = 0; m < numModalities; m++) {
             String alphaStr = "";
             for (int topic = 0; topic < numTopics; topic++) {
                 alphaStr += topic + ":" + formatter.format(alpha[m][topic]) + " ";
             }
 
-            logger.info("[Alpha[" + m + "]: [" + alphaStr + "] ");
+            LOGGER.info("[Alpha[" + m + "]: [" + alphaStr + "] ");
         }
 
 //            if (alpha[m].size() < numTopics + 1) {

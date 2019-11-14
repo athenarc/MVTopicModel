@@ -8,6 +8,9 @@ import com.sree.textbytes.jtopia.TermDocument;
 import com.sree.textbytes.jtopia.TermsExtractor;
 import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
+import org.madgik.MVTopicModel.config.Config;
+import org.madgik.MVTopicModel.io.TMDataSource;
+import org.madgik.MVTopicModel.io.TMDataSourceFactory;
 import org.madgik.utils.CSV2FeatureSequence;
 
 import java.io.*;
@@ -39,7 +42,8 @@ public class SciTopicFlow {
         PPR
     }
 
-    public static Logger logger = Logger.getLogger("SciTopic");
+    public static String LOGGERNAME = "SciTopic";
+    public static Logger LOGGER = Logger.getLogger(LOGGERNAME);
 
     private int topWords = 20;
     private int showTopicsInterval = 50;
@@ -51,7 +55,7 @@ public class SciTopicFlow {
     private int numChars = 4000;
     private int burnIn = 50;
     private int optimizeInterval = 50;
-    private  ExperimentType experimentType = ExperimentType.ACM;
+    private  ExperimentType experimentType = ExperimentType.PubMed;
 
     private double pruneCntPerc = 0.002;    //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
     private double pruneLblCntPerc = 0.002;   //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
@@ -75,7 +79,7 @@ public class SciTopicFlow {
     private String SQLConnectionString = "jdbc:postgresql://localhost:5432/tender?user=postgres&password=postgres&ssl=false"; //"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
     private String experimentId = "";
     private String previousModelFile = "";
-    private int limitDocs = 10000;
+    private int limitDocs = 1000;
     private boolean D4I = true;
 
     public SciTopicFlow() throws IOException {
@@ -84,12 +88,12 @@ public class SciTopicFlow {
 
     public SciTopicFlow(Map<String, String> runtimeProp) throws IOException {
 
+        Config config = new Config("config.properties");
+        //LOGGER.setLevel(Level.DEBUG);
         SimilarityType similarityType = SimilarityType.cos; //Cosine 1 jensenShannonDivergence 2 symmetric KLP
 
         String dictDir = "";
-
         Connection connection = null;
-
         getPropValues(runtimeProp);
 
         String experimentString = experimentType.toString() + "_" + numTopics + "T_"
@@ -113,11 +117,11 @@ public class SciTopicFlow {
         }
 
         if (runWordEmbeddings) {
-            logger.info(" calc word embeddings starting");
+            LOGGER.info(" calc word embeddings starting");
             InstanceList[] instances = ImportInstancesWithNewPipes(ReadDataFromDB(SQLConnectionString, experimentType, numModalities, limitDocs, ""), experimentType, numModalities,
                     pruneCntPerc, pruneLblCntPerc, pruneMaxPerc, false, (experimentType == ExperimentType.PubMed) ? ";" : ",");
 
-            logger.info(" instances added through pipe");
+            LOGGER.info(" instances added through pipe");
 
             //int numDimensions = 50;
             int windowSizeOption = 5;
@@ -128,23 +132,44 @@ public class SciTopicFlow {
             matrix.queryWord = "skin";
             matrix.countWords(instances[0], 0.0001); //Sampling factor : "Down-sample words that account for more than ~2.5x this proportion or the corpus."
             matrix.train(instances[0], numOfThreads, numSamples, numEpochs);
-            logger.info(" calc word embeddings ended");
+            LOGGER.info(" calc word embeddings ended");
             //PrintWriter out = new PrintWriter("vectors.txt");
             //matrix.write(out);
             //out.close();
             matrix.write(SQLConnectionString, 0);
-            logger.info(" writing word embeddings ended");
+            LOGGER.info(" writing word embeddings ended");
         }
 
         if (runTopicModelling) {
 
-            logger.info(" TopicModelling has started");
+            LOGGER.info(" TopicModelling has started");
             String batchId = "-1";
 
-            InstanceList[] instances = ImportInstancesWithNewPipes(ReadDataFromDB(SQLConnectionString, experimentType, numModalities, limitDocs, ""), experimentType, numModalities,
+            String filter = " document.batchid > '2018' ";
+            TMDataSource inputDS = TMDataSourceFactory.instantiate(config.getInputDataSourceType(), config.getInputDataSourceParams());
+            ArrayList<ArrayList<Instance>> instanceBuffer = inputDS.getModellingInputs(config);
+
+//            try{
+//                ObjectInputStream in = new ObjectInputStream(new FileInputStream("/home/nik/athena/code/MVTopicModel_metaxas/src/main/java/org/madgik/MVTopicModel/instances." + limitDocs + ".serialized"));
+//                instanceBuffer =  (ArrayList<ArrayList<Instance>>) in.readObject();
+//                System.out.println("Deserialized!");
+//            } catch (IOException e) {
+//                // e.printStackTrace();
+//                instanceBuffer = ReadDataFromDB(SQLConnectionString, experimentType, numModalities, limitDocs, filter);
+//
+//                ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream("/home/nik/athena/code/MVTopicModel_metaxas/src/main/java/org/madgik/MVTopicModel/instances." + limitDocs + ".serialized"));
+//                out.writeObject(instanceBuffer);
+//                out.close();
+//                System.out.println("Serialized!");
+//
+//            } catch (ClassNotFoundException e) {
+//                e.printStackTrace();
+//            }
+
+            InstanceList[] instances = ImportInstancesWithNewPipes(instanceBuffer, experimentType, numModalities,
                     pruneCntPerc, pruneLblCntPerc, pruneMaxPerc, false, (experimentType == ExperimentType.PubMed) ? ";" : ",");
 
-            logger.info("Instances added through pipe");
+            LOGGER.info("Instances added through pipe");
 
             double beta = 0.01;
             double[] betaMod = new double[numModalities];
@@ -173,17 +198,17 @@ public class SciTopicFlow {
             model.setNumThreads(numOfThreads);
 
             model.addInstances(instances, batchId, vectorSize, null);//trainingInstances);//instances);
-            logger.info(" instances added");
+            LOGGER.info(" instances added");
 
             //model.readWordVectorsDB(SQLConnectionString, vectorSize);
             model.estimate();
-            logger.info("Model estimated");
+            LOGGER.info("Model estimated");
 
             model.saveResults(SQLConnectionString, experimentId, experimentDetails);
-            logger.info("Model saved");
+            LOGGER.info("Model saved");
 
-            logger.info("Model Id: \n" + experimentId);
-            logger.info("Model Metadata: \n" + model.getExpMetadata());
+            LOGGER.info("Model Id: \n" + experimentId);
+            LOGGER.info("Model Metadata: \n" + model.getExpMetadata());
 
             //if (modelEvaluationFile != null) {
             try {
@@ -192,18 +217,18 @@ public class SciTopicFlow {
 
                 FastQMVWVTopicModelDiagnostics diagnostics = new FastQMVWVTopicModelDiagnostics(model, topWords);
                 diagnostics.saveToDB(SQLConnectionString, experimentId, perplexity, batchId);
-                logger.info("full diagnostics calculation finished");
+                LOGGER.info("full diagnostics calculation finished");
 
             } catch (Exception e) {
 
-                logger.error(e.getMessage());
+                LOGGER.error(e.getMessage());
             }
 
         }
 
         if (runInference) {
 
-            logger.info(" Inference on new docs has started");
+            LOGGER.info(" Inference on new docs has started");
             String batchId = "-1";
 
             FastQMVWVTopicInferencer inferencer = null;
@@ -215,7 +240,7 @@ public class SciTopicFlow {
                 try {
                     inferencer = FastQMVWVTopicInferencer.read(new File(inferencerFilename));
                 } catch (Exception e) {
-                    logger.error("Unable to restore saved topic model "
+                    LOGGER.error("Unable to restore saved topic model "
                             + inferencerFilename + ": " + e);
 
                 }
@@ -227,17 +252,17 @@ public class SciTopicFlow {
                 try {
                     inferencer = FastQMVWVTopicInferencer.read(SQLConnectionString, experimentId);
                 } catch (Exception e) {
-                    logger.error("Unable to restore saved topic model "
+                    LOGGER.error("Unable to restore saved topic model "
                             + experimentId + ": " + e);
 
                 }
           
 
-                InstanceList[] instances = ImportInstancesWithExistingPipes(
-                        ReadDataFromDB(SQLConnectionString, experimentType, numModalities, 10, "WHERE batchid>'2018'"), 
-                        inferencer.getPipes(), numModalities);
-
-                logger.info("Instances added through pipe");
+                TMDataSource inferenceDs = TMDataSourceFactory.instantiate(config.getInferenceDataSourceType(), config.getInferenceDataSourceParams());
+                ArrayList<ArrayList<Instance>> instanceBuffer = inferenceDs.getInferenceInputs(config);
+                // ArrayList<ArrayList<Instance>> instanceBuffer = ReadDataFromDB(SQLConnectionString, experimentType, numModalities, 10, "WHERE batchid>'2018'");
+                InstanceList[] instances = ImportInstancesWithExistingPipes(instanceBuffer, inferencer.getPipes(), numModalities);
+                LOGGER.info("Instances added through pipe");
 
                 inferencer.inferTopicDistributionsOnNewDocs(instances, SQLConnectionString, experimentId, null);
            
@@ -303,7 +328,7 @@ public class SciTopicFlow {
             experimentId = prop.getProperty("ExperimentId");
 
         } catch (Exception e) {
-            logger.error("Exception in reading properties: " + e);
+            LOGGER.error("Exception in reading properties: " + e);
         } finally {
             inputStream.close();
         }
@@ -401,7 +426,7 @@ public class SciTopicFlow {
             connection = DriverManager.getConnection(SQLConnection);
             Statement statement = connection.createStatement();
 
-            logger.info("Finding key phrases calculation started");
+            LOGGER.info("Finding key phrases calculation started");
 
             String sql = "select doc_topic.TopicId, document.title, document.abstract from \n"
                     + "doc_topic\n"
@@ -422,7 +447,7 @@ public class SciTopicFlow {
                 int newTopicId = rs.getInt("TopicId");
 
                 if (newTopicId != topicId && topicId != -1) {
-                    logger.info("Finding key phrases for topic " + topicId);
+                    LOGGER.info("Finding key phrases for topic " + topicId);
                     topiaDoc = termExtractor.extractTerms(stringBuffer.toString());
                     topicTitles.put(topicId, topiaDoc.getFinalFilteredTerms());
                     stringBuffer = new StringBuffer();
@@ -433,7 +458,7 @@ public class SciTopicFlow {
 
             }
 
-            logger.info("Finding key phrases for topic " + topicId);
+            LOGGER.info("Finding key phrases for topic " + topicId);
             topiaDoc = termExtractor.extractTerms(stringBuffer.toString());
             topicTitles.put(topicId, topiaDoc.getFinalFilteredTerms());
 
@@ -444,7 +469,7 @@ public class SciTopicFlow {
             PreparedStatement bulkInsert = null;
             sql = "insert into TopicKeyPhrase values(?,?,?,?,?,?,?);";
 
-            logger.info("Saving key phrases....");
+            LOGGER.info("Saving key phrases....");
             try {
 
                 connection.setAutoCommit(false);
@@ -472,13 +497,13 @@ public class SciTopicFlow {
 
             } catch (SQLException e) {
 
-                logger.error("Error in insert topicPhrases: " + e);
+                LOGGER.error("Error in insert topicPhrases: " + e);
                 if (connection != null) {
                     try {
-                        logger.error("Transaction is being rolled back");
+                        LOGGER.error("Transaction is being rolled back");
                         connection.rollback();
                     } catch (SQLException excep) {
-                        logger.error("Error in insert topicPhrases: " + excep);
+                        LOGGER.error("Error in insert topicPhrases: " + excep);
                     }
                 }
             } finally {
@@ -492,7 +517,7 @@ public class SciTopicFlow {
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
-            logger.error(e.getMessage());
+            LOGGER.error(e.getMessage());
         } finally {
             try {
                 if (connection != null) {
@@ -500,11 +525,11 @@ public class SciTopicFlow {
                 }
             } catch (SQLException e) {
                 // connection close failed.
-                logger.error(e);
+                LOGGER.error(e);
             }
         }
 
-        logger.info("Finding Key phrases finished");
+        LOGGER.info("Finding Key phrases finished");
 
     }
 
@@ -607,10 +632,10 @@ public class SciTopicFlow {
 
             if (connection != null) {
                 try {
-                    logger.error("Transaction is being rolled back");
+                    LOGGER.error("Transaction is being rolled back");
                     connection.rollback();
                 } catch (SQLException excep) {
-                    logger.error("Error in insert TokensPerEntity");
+                    LOGGER.error("Error in insert TokensPerEntity");
                 }
             }
         } finally {
@@ -620,7 +645,7 @@ public class SciTopicFlow {
                 }
                 connection.setAutoCommit(true);
             } catch (SQLException excep) {
-                logger.error("Error in insert TokensPerEntity");
+                LOGGER.error("Error in insert TokensPerEntity");
             }
         }
 
@@ -774,9 +799,9 @@ public class SciTopicFlow {
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
-            logger.error(e.getMessage());
+            LOGGER.error(e.getMessage());
         } catch (Exception e) {
-            logger.error("File input error");
+            LOGGER.error("File input error");
         } finally {
             try {
                 if (connection != null) {
@@ -784,7 +809,7 @@ public class SciTopicFlow {
                 }
             } catch (SQLException e) {
                 // connection close failed.
-                logger.error(e);
+                LOGGER.error(e);
             }
         }
 
@@ -811,12 +836,12 @@ public class SciTopicFlow {
             connection = DriverManager.getConnection(SQLConnectionString);
             Statement statement = connection.createStatement();
 
-            logger.info("Calc topic Entity Topic Distributions and Trends started");
+            LOGGER.info("Calc topic Entity Topic Distributions and Trends started");
 
             String deleteSQL = String.format("Delete from EntityTopicDistribution where ExperimentId= '%s'", experimentId);
             statement.executeUpdate(deleteSQL);
 
-            logger.info("Insert Full Topic Distribution ");
+            LOGGER.info("Insert Full Topic Distribution ");
 
             String SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
                     + "select '',  doc_topic.TopicId, '', 'Corpus', round(sum(weight)/SumTopicWeightView.SumWeight, 5) as NormWeight, doc_topic.ExperimentId\n"
@@ -835,7 +860,7 @@ public class SciTopicFlow {
 
             if (experimentType == ExperimentType.ACM) {
 
-                logger.info("Trend Topic distribution for the whole coprus");
+                LOGGER.info("Trend Topic distribution for the whole coprus");
 
                 SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
                         + "select Document.BatchId,  doc_topic.TopicId, '', 'CorpusTrend', \n"
@@ -853,7 +878,7 @@ public class SciTopicFlow {
 
                 statement.executeUpdate(SQLstr);
 
-                logger.info("Repository Topic distribution for the whole coprus");
+                LOGGER.info("Repository Topic distribution for the whole coprus");
 
                 SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
                         + "select '',  doc_topic.TopicId, Document.Repository, 'Repository', \n"
@@ -871,7 +896,7 @@ public class SciTopicFlow {
 
                 statement.executeUpdate(SQLstr);
 
-                logger.info("Author Topic distribution");
+                LOGGER.info("Author Topic distribution");
 
                 SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
                         + "SELECT '', doc_topic.TopicId, Doc_author.AuthorId,'Author',\n"
@@ -894,7 +919,7 @@ public class SciTopicFlow {
 
                 statement.executeUpdate(SQLstr);
 
-                logger.info("Journal Topic distribution");
+                LOGGER.info("Journal Topic distribution");
 
                 SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
                         + "SELECT '', doc_topic.TopicId, Doc_journal.issn,'Journal',\n"
@@ -912,7 +937,7 @@ public class SciTopicFlow {
 
                 statement.executeUpdate(SQLstr);
 
-                logger.info("Journal Trend Topic distribution");
+                LOGGER.info("Journal Trend Topic distribution");
 
                 SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
                         + "SELECT Document.batchId, doc_topic.TopicId, doc_journal.issn,'JournalTrend',\n"
@@ -932,7 +957,7 @@ public class SciTopicFlow {
 
                 statement.executeUpdate(SQLstr);
 
-                logger.info("Conference Topic distribution");
+                LOGGER.info("Conference Topic distribution");
 
                 SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
                         + "SELECT '', doc_topic.TopicId, doc_conference.acronymBase,'Conference',\n"
@@ -950,7 +975,7 @@ public class SciTopicFlow {
 
                 statement.executeUpdate(SQLstr);
 
-                logger.info("Conference Trend Topic distribution");
+                LOGGER.info("Conference Trend Topic distribution");
 
                 SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
                         + " SELECT Document.batchId, doc_topic.TopicId, doc_conference.acronymBase,'ConferenceTrend',\n"
@@ -974,7 +999,7 @@ public class SciTopicFlow {
 
             if (experimentType == ExperimentType.PubMed) {
 
-                logger.info("Trend Topic distribution for the whole coprus");
+                LOGGER.info("Trend Topic distribution for the whole coprus");
 
                 SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
                         + "select Document.BatchId,  doc_topic.TopicId, '', 'CorpusTrend', \n"
@@ -992,7 +1017,7 @@ public class SciTopicFlow {
 
                 statement.executeUpdate(SQLstr);
 
-                logger.info("Project Topic distribution");
+                LOGGER.info("Project Topic distribution");
 
                 SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
                         + "SELECT '', doc_topic.TopicId, Doc_Project.ProjectId,'Project',\n"
@@ -1015,7 +1040,7 @@ public class SciTopicFlow {
 
                 statement.executeUpdate(SQLstr);
 
-                logger.info("Funder Topic distribution");
+                LOGGER.info("Funder Topic distribution");
                 SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
                         + " SELECT '', doc_topic.TopicId, doc_funder_view.funder,'Funder',\n"
                         + "                               round(sum(doc_topic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
@@ -1039,7 +1064,7 @@ public class SciTopicFlow {
 
                 statement.executeUpdate(SQLstr);
 
-                logger.info("Funder Trend Topic distribution");
+                LOGGER.info("Funder Trend Topic distribution");
 
                 SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
                         + "SELECT Document.batchId, doc_topic.TopicId, doc_funder_view.funder,'FunderTrend',\n"
@@ -1060,7 +1085,7 @@ public class SciTopicFlow {
                 statement.executeUpdate(SQLstr);
 
             }
-            logger.info("Entity and trends topic distribution finished");
+            LOGGER.info("Entity and trends topic distribution finished");
 
         } catch (SQLException e) {
             // if the error message is "out of memory", 
@@ -1077,7 +1102,7 @@ public class SciTopicFlow {
             }
         }
 
-        logger.info("Topic similarities calculation finished");
+        LOGGER.info("Topic similarities calculation finished");
 
     }
 
@@ -1089,7 +1114,7 @@ public class SciTopicFlow {
             connection = DriverManager.getConnection(SQLConnectionString);
             Statement statement = connection.createStatement();
 
-            logger.info("Calc topic similarities started");
+            LOGGER.info("Calc topic similarities started");
 
             String distinctTopicsSQL = "Select  TopicId,  ExperimentId, count(*) as cnt\n"
                     + "from TopicVector\n  "
@@ -1162,10 +1187,10 @@ public class SciTopicFlow {
 
                 if (connection != null) {
                     try {
-                        logger.error("Transaction is being rolled back");
+                        LOGGER.error("Transaction is being rolled back");
                         connection.rollback();
                     } catch (SQLException excep) {
-                        logger.error("Error in insert grantSimilarity");
+                        LOGGER.error("Error in insert grantSimilarity");
                     }
                 }
             } finally {
@@ -1179,7 +1204,7 @@ public class SciTopicFlow {
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
-            logger.error(e.getMessage());
+            LOGGER.error(e.getMessage());
         } finally {
             try {
                 if (connection != null) {
@@ -1187,18 +1212,18 @@ public class SciTopicFlow {
                 }
             } catch (SQLException e) {
                 // connection close failed.
-                logger.error(e);
+                LOGGER.error(e);
             }
         }
 
-        logger.info("Topic similarities calculation finished");
+        LOGGER.info("Topic similarities calculation finished");
 
     }
 
     public void calcPPRSimilarities(String SQLConnectionString) {
         //calc similarities
 
-        //logger.info("PPRSimilarities calculation Started");
+        //LOGGER.info("PPRSimilarities calculation Started");
         Connection connection = null;
         try {
             // create a database connection
@@ -1206,7 +1231,7 @@ public class SciTopicFlow {
             connection = DriverManager.getConnection(SQLConnectionString);
             Statement statement = connection.createStatement();
 
-            logger.info("PPRSimilarities calculation Started");
+            LOGGER.info("PPRSimilarities calculation Started");
 
             String sql = "SELECT source.OrigId||'PPR' AS PubID, target.OrigId  AS CitationId, prLinks.Counts As Counts FROM prLinks\n"
                     + "INNER JOIN PubCitationPPRAlias source ON source.RowId = PrLinks.Source\n"
@@ -1285,10 +1310,10 @@ public class SciTopicFlow {
 
                 if (connection != null) {
                     try {
-                        logger.error("Transaction is being rolled back");
+                        LOGGER.error("Transaction is being rolled back");
                         connection.rollback();
                     } catch (SQLException excep) {
-                        logger.error("Error in insert grantSimilarity");
+                        LOGGER.error("Error in insert grantSimilarity");
                     }
                 }
             } finally {
@@ -1302,7 +1327,7 @@ public class SciTopicFlow {
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
-            logger.error(e.getMessage());
+            LOGGER.error(e.getMessage());
         } finally {
             try {
                 if (connection != null) {
@@ -1310,17 +1335,17 @@ public class SciTopicFlow {
                 }
             } catch (SQLException e) {
                 // connection close failed.
-                logger.error(e);
+                LOGGER.error(e);
             }
         }
 
-        logger.info("Pub citation similarities calculation finished");
+        LOGGER.info("Pub citation similarities calculation finished");
     }
 
     public void calcSimilarities(String SQLConnectionString, ExperimentType experimentType, String experimentId, boolean ACMAuthorSimilarity, SimilarityType similarityType, int numTopics) {
         //calc similarities
 
-        logger.info("similarities calculation Started");
+        LOGGER.info("similarities calculation Started");
         Connection connection = null;
         try {
             // create a database connection
@@ -1499,10 +1524,10 @@ public class SciTopicFlow {
 
                 if (connection != null) {
                     try {
-                        logger.error("Transaction is being rolled back");
+                        LOGGER.error("Transaction is being rolled back");
                         connection.rollback();
                     } catch (SQLException excep) {
-                        logger.error("Error in insert grantSimilarity");
+                        LOGGER.error("Error in insert grantSimilarity");
                     }
                 }
             } finally {
@@ -1516,7 +1541,7 @@ public class SciTopicFlow {
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
-            logger.error(e.getMessage());
+            LOGGER.error(e.getMessage());
         } finally {
             try {
                 if (connection != null) {
@@ -1524,11 +1549,11 @@ public class SciTopicFlow {
                 }
             } catch (SQLException e) {
                 // connection close failed.
-                logger.error(e);
+                LOGGER.error(e);
             }
         }
 
-        logger.info("similarities calculation finished");
+        LOGGER.info("similarities calculation finished");
     }
 
     // Read data from DB and convert them to a list of instances per view (modality)
@@ -1551,7 +1576,17 @@ public class SciTopicFlow {
             connection.setAutoCommit(false);
 
             String sql = "";
-            String txtsql = "select doctxt_view.docId, text, fulltext from doctxt_view " + filter + " Order by doctxt_view.docId " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+            // String txtsql = "select doctxt_view.docId, text, fulltext from doctxt_view " + filter + " Order by doctxt_view.docId " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+            String txtsql =  "select distinct ON (document.id)  document.id as docid, " +
+                    "substr((((COALESCE(pmc_titles_temp.title, ''::text) || ' '::text) || substr(COALESCE(document.abstract_pmc, ''::text), 0, 7000)) || ' '::text), 0, 10000) AS text,"
+                    + "batchid from document \n"
+                    + " LEFT JOIN doc_project on doc_project.docid = document.id  \n" +
+                    "left join pmc_titles_temp on pmc_titles_temp.docid = document.id \n"
+                    + "where document.doctype='publication' and batchid > '2017' and (language_pmc is null or language_pmc = 'eng') and document.abstract_pmc is not null\n"
+                    + "and (repository = 'PubMed Central' OR  doc_project.projectid IN \n"
+                    + "(select projectid from projects_atleast5docs))"
+                    + "Order by document.id \n"
+                    + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");//+ " LIMIT 10000";
 
             if (experimentType == ExperimentType.ACM) {
 
@@ -1569,7 +1604,22 @@ public class SciTopicFlow {
                 }
                  */
             } else if (experimentType == ExperimentType.PubMed) {
-                sql = " select  docid, keywords, meshterms, dbpediaresources  from docsideinfo_view  " + filter + " Order by docsideinfo_view.docId " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+                // sql = " select  docid, keywords, meshterms, dbpediaresources  from docsideinfo_view  " + filter + " Order by docsideinfo_view.docId " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+
+                sql = "select distinct ON (docsideinfo_norescount_view.docid)  docsideinfo_norescount_view.docid, keywords, meshterms, dbpediaresources  \n"
+                        + "from docsideinfo_norescount_view  \n"
+                        + "LEFT JOIN doc_project on doc_project.docid = docsideinfo_norescount_view.docId\n"
+                        + "LEFT JOIN document on document.id = docsideinfo_norescount_view.docId\n"
+
+                        + "where document.doctype='publication' and document.batchid > '2017' and (language_pmc is null or language_pmc = 'eng') and document.abstract_pmc is not null\n"
+                        + "and (document.repository = 'PubMed Central' OR  doc_project.projectid IN \n"
+                        + "(select projectid from projects_atleast5docs))"
+                        + "Order by docsideinfo_norescount_view.docId \n"
+                        + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+
+
+
+                LOGGER.info("Text SQL:\n" + txtsql);
                 /* if (D4I) {
                     sql = "select distinct ON (docsideinfo_view.docid)  docsideinfo_view.docid, keywords, meshterms, dbpediaresources  \n"
                             + "from docsideinfo_view  \n"
@@ -1586,7 +1636,7 @@ public class SciTopicFlow {
 
             }
 
-            logger.info(" Getting text from the database");
+            LOGGER.info(" Getting text from the database");
             // get txt data 
             Statement txtstatement = connection.createStatement();
             txtstatement.setFetchSize(10000);
@@ -1610,7 +1660,7 @@ public class SciTopicFlow {
             }
 
             if (numModalities > 1) {
-                logger.info(" Getting side info from the database");
+                LOGGER.info(" Getting side info from the database");
                 Statement statement = connection.createStatement();
                 statement.setFetchSize(10000);
                 ResultSet rs = statement.executeQuery(sql);
@@ -1756,7 +1806,7 @@ public class SciTopicFlow {
         } catch (SQLException e) {
             // if the error message is "out of memory", 
             // it probably means no database file is found
-            logger.error(e.getMessage());
+            LOGGER.error(e.getMessage());
 
         } finally {
             try {
@@ -1765,14 +1815,14 @@ public class SciTopicFlow {
                 }
             } catch (SQLException e) {
                 // connection close failed.
-                logger.error(e.getMessage());
+                LOGGER.error(e.getMessage());
 
             }
         }
 
         for (byte m = (byte) 0; m < numModalities; m++) {
 
-            logger.info("Read " + instanceBuffer.get(m).size() + " instances modality: " + (instanceBuffer.get(m).size() > 0 ? instanceBuffer.get(m).get(0).getSource().toString() : m));
+            LOGGER.info("Read " + instanceBuffer.get(m).size() + " instances modality: " + (instanceBuffer.get(m).size() > 0 ? instanceBuffer.get(m).get(0).getSource().toString() : m));
 
         }
         return instanceBuffer;
@@ -1781,7 +1831,7 @@ public class SciTopicFlow {
 
     public InstanceList[] ImportInstancesWithExistingPipes(ArrayList<ArrayList<Instance>> instanceBuffer, Pipe[] existingPipes, byte numModalities) {
         if (existingPipes.length < numModalities) {
-            logger.error("ImportDataWithExistingPipes: Missing existing pipes");
+            LOGGER.error("ImportDataWithExistingPipes: Missing existing pipes");
             return null;
 
         }
@@ -1844,7 +1894,7 @@ public class SciTopicFlow {
                 GenerateStoplist(tokenizer, instanceBuffer.get(0), prunCnt, pruneMaxPerc, false);
                 instances[0].addThruPipe(instanceBuffer.get(0).iterator());
             } catch (IOException e) {
-                logger.error("Problem adding text: "
+                LOGGER.error("Problem adding text: "
                         + e);
 
             }
@@ -1902,7 +1952,7 @@ public class SciTopicFlow {
                         instances[m].remove(0);
                     }
 
-//                logger.info("features: " + oldAlphabet.size()
+//                LOGGER.info("features: " + oldAlphabet.size()
                     //                       + " -> " + newAlphabet.size());
                     // Make the new list the official list.
                     instances[m] = newInstanceList;
@@ -1913,7 +1963,7 @@ public class SciTopicFlow {
 //                        oos.writeObject(tmp);
 //                        oos.close();
 //                    } catch (IOException e) {
-//                        logger.error("Problem serializing modality " + m + " alphabet to file "
+//                        LOGGER.error("Problem serializing modality " + m + " alphabet to file "
 //                                + txtAlphabetFile + ": " + e);
 //                    }
 

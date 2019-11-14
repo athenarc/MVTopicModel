@@ -75,7 +75,7 @@ public abstract class SpamClassifier {
 
     static CommandOption.Integer verbosityOption = new CommandOption.Integer(SpamClassifier.class, "verbosity", "INTEGER", true, -1,
             "The level of messages to print: 0 is silent, 8 is most verbose. "
-            + "Levels 0-8 correspond to the java.logger predefined levels "
+            + "Levels 0-8 correspond to the java.LOGGER predefined levels "
             + "off, severe, warning, info, config, fine, finer, finest, all. "
             + "The default value is taken from the mallet logging.properties file,"
             + " which currently defaults to INFO level (3)", null);

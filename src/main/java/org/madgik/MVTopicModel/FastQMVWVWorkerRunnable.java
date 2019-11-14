@@ -187,14 +187,14 @@ public class FastQMVWVWorkerRunnable implements Runnable {
 
         try {
 
-            //logger.info("Worker[" + threadId + "] thread started");
+            //LOGGER.info("Worker[" + threadId + "] thread started");
             // Initialize the doc smoothing-only sampling bucket (Sum(a[i])
             for (int doc = startDoc;
                     doc < data.size() && doc < startDoc + numDocs;
                     doc++) {
 
                 //if (doc % 50000 == 0) {
-                //  logger.info("Worker["+ threadId+"] processing doc " + doc);
+                //  LOGGER.info("Worker["+ threadId+"] processing doc " + doc);
                 //System.out.println("processing doc " + doc);
                 //}
 //				
@@ -212,7 +212,7 @@ public class FastQMVWVWorkerRunnable implements Runnable {
 
             shouldSaveState = false;
             //isFinished = true;
-            logger.info("Worker[" + threadId + "] thread finished");
+            logger.debug("Worker[" + threadId + "] thread finished");
             for (int utId = 0; utId < nut; utId++) {
                 queues.get(nst * utId + threadId).put(new FastQDelta(-1, -1, -1, -1, -1, -1));
             }
@@ -523,7 +523,7 @@ public class FastQMVWVWorkerRunnable implements Runnable {
                             newMassCnt.getAndIncrement();
 
                             newTopic = inActiveTopicIndex.first();//ThreadLocalRandom.current().nextInt(inActiveTopicIndex.size()));
-                            System.out.println("Sample new topic: " + newTopic);
+                            logger.debug("Sample new topic: " + newTopic);
                         } else {
                             sample -= newTopicMass;
                             if (sample < topicDocWordMass) {

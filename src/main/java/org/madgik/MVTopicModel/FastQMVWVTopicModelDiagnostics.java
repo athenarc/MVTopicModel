@@ -1,5 +1,7 @@
 package org.madgik.MVTopicModel;
 
+import edu.stanford.nlp.util.Quadruple;
+import org.apache.commons.lang.ArrayUtils;
 import org.madgik.utils.MixTopicModelTopicAssignment;
 import java.io.*;
 import java.util.*;
@@ -17,6 +19,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import org.apache.log4j.Logger;
+import org.madgik.utils.Utils;
 
 public class FastQMVWVTopicModelDiagnostics {
 
@@ -839,6 +842,12 @@ public class FastQMVWVTopicModelDiagnostics {
             topicWordScores[topic][wordPosition] = score;
             wordScoresDefined = true;
         }
+
+        // for java serialization
+        public Quadruple toQuadruple(){
+            return new Quadruple<String, Double[], Double[][], Boolean>(name, ArrayUtils.toObject(scores), Utils.toDouble2DObject(topicWordScores), wordScoresDefined);
+        }
+
     }
 
     public static void main(String[] args) throws Exception {
