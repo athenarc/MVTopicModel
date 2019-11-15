@@ -2,20 +2,17 @@ package org.madgik.MVTopicModel;
 
 import edu.stanford.nlp.util.Quadruple;
 import org.apache.commons.lang.ArrayUtils;
+import org.madgik.MVTopicModel.model.Score;
 import org.madgik.utils.MixTopicModelTopicAssignment;
 import java.io.*;
 import java.util.*;
-import java.text.*;
 
 import cc.mallet.types.*;
-import cc.mallet.util.*;
 
-import gnu.trove.*;
 import gnu.trove.set.hash.TIntHashSet;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import org.apache.log4j.Logger;
@@ -615,9 +612,34 @@ public class FastQMVWVTopicModelDiagnostics {
         return scores;
     }
 
-    public void saveToDB(String SQLLitedb, String experimentId, double perplexity, String BatchId) {
-        //String SQLLitedb = "jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
+    public List<Score> getBundledScores() {
+        return bundledScores;
+    }
 
+    List<Score> bundledScores;
+
+    public void calcBundledScores(){
+        logger.info("Calculating bundled scores.");
+        bundledScores = new ArrayList<>();
+        for (byte m = 0; m < model.numModalities; m++) {
+            int p=1;
+            while (p < model.perplexities[m].length && model.perplexities[m][p] != 0) //for (int p = 0; p < model.perplexities[m].length; p++)
+            {
+                bundledScores.add(new Score(0, "TestCorpus", Score.type.CORPUS, "perplexity"));
+                while (p < model.perplexities[m].length && model.perplexities[m][p] != 0) {
+                    bundledScores.add(new Score(model.perplexities[m][p], String.format("%d", 10 * p), Score.type.CORPUS, "LogLikelihood"));
+                    p++;
+                }
+            }
+        }
+        for (int topic = 0; topic < numTopics; topic++) {
+            for (TopicScores scores : diagnostics)
+                bundledScores.add(new Score(scores.scores[topic], String.format("Topic %d", topic), Score.type.TOPIC, scores.name));
+        }
+
+    }
+
+    public void saveToDB(String SQLLitedb, String experimentId, double perplexity, String BatchId) {
         Connection connection = null;
         String current_score = "";
         try {
@@ -655,18 +677,6 @@ public class FastQMVWVTopicModelDiagnostics {
                     bulkInsert.executeUpdate();
                     p++;
                 }
-
-//                p = 1;
-//                while (p < model.convergenceRates[m].length && model.convergenceRates[m][p] > 0) //                for (int p = 0; p < model.convergenceRates[m].length; p++) 
-//                {
-//                    bulkInsert.setString(1, experimentId);
-//                    bulkInsert.setString(2, String.format("%d", 10 * p));
-//                    bulkInsert.setInt(3, 0); //corpus
-//                    bulkInsert.setString(4, "convergenceRates");
-//                    bulkInsert.setDouble(5, model.convergenceRates[m][p]);
-//                    bulkInsert.executeUpdate();
-//                    p++;
-//                }
             }
 
             for (int topic = 0; topic < numTopics; topic++) {
@@ -682,26 +692,6 @@ public class FastQMVWVTopicModelDiagnostics {
                     bulkInsert.setDouble(6, scores.scores[topic]);
                     bulkInsert.executeUpdate();
                 }
-
-//                for (int position = 0; position < topicTopWords[topic].length; position++) {
-//                    if (topicTopWords[topic][position] == null) {
-//                        break;
-//                    }
-//
-//                    formatter.format("  %s", topicTopWords[topic][position]);
-//                    for (TopicScores scores : diagnostics) {
-//                        if (scores.wordScoresDefined) {
-//                            formatter.format("\t%s=%.4f", scores.name, scores.topicWordScores[topic][position]);
-//                            bulkInsert.setString(1, experimentId);
-//                    bulkInsert.setString(2, String.format("Topic %d", topic));
-//                    bulkInsert.setInt(3, 1); //Word
-//                    bulkInsert.setString(4, scores.name);
-//                    bulkInsert.setDouble(5, scores.scores[topic]);
-//                    bulkInsert.executeUpdate();
-//                        }
-//                    }
-//                    
-//                }
             }
 
             connection.commit();

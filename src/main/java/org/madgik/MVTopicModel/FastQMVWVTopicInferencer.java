@@ -15,7 +15,7 @@ import cc.mallet.types.*;
 import cc.mallet.util.*;
 import gnu.trove.map.hash.TObjectIntHashMap;
 
-import java.util.Arrays;
+import java.util.*;
 import java.io.*;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -23,9 +23,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CyclicBarrier;
@@ -111,7 +108,8 @@ public class FastQMVWVTopicInferencer implements Serializable {
         return pipes;
     }
 
-    public void inferTopicDistributionsOnNewDocs(InstanceList[] training, String SQLConnectionString, String experimentId, PrintWriter out) throws IOException {
+    // public void inferTopicDistributionsOnNewDocs(InstanceList[] training, String SQLConnectionString, String experimentId, PrintWriter out) throws IOException {
+    public void inferTopicDistributionsOnNewDocs(InstanceList[] training){
 
         TObjectIntHashMap<String> entityPosition = new TObjectIntHashMap<String>();
 
@@ -282,7 +280,8 @@ public class FastQMVWVTopicInferencer implements Serializable {
 
             long elapsedMillis = System.currentTimeMillis() - iterationStart;
             if (elapsedMillis < 5000) {
-                logger.info(elapsedMillis + "ms ");
+                ;
+                //logger.info(elapsedMillis + "ms ");
             } else {
                 logger.info((elapsedMillis / 1000) + "s ");
             }
@@ -324,12 +323,85 @@ public class FastQMVWVTopicInferencer implements Serializable {
 
         //End of Sampling phase
         //save results
-        double threshold = 0.03;
-        int max = -1;
-        printDocumentTopics(out, threshold, max, SQLConnectionString, experimentId);
+        // double threshold = 0.03;
+        // int max = -1;
+        // printDocumentTopics(out, threshold, max, SQLConnectionString, experimentId);
     }
 
+
+    public Map<String, Map<Integer, Double>> getDocTopicMap() {
+        return docTopicMap;
+    }
+
+    Map<String, Map<Integer, Double>> docTopicMap;
+    public void computeDocumentAssignments(double threshold){
+        docTopicMap = new HashMap<>();
+
+        int max = -1;
+        if (max < 0 || max > numTopics) max = numTopics;
+
+        int[] docLen = new int[numModalities];
+
+        int[][] topicCounts = new int[numModalities][numTopics];
+
+        IDSorter[] sortedTopics = new IDSorter[numTopics];
+        for (int topic = 0; topic < numTopics; topic++) {
+            // Initialize the sorters with dummy values
+            sortedTopics[topic] = new IDSorter(topic, topic);
+        }
+
+        for (int doc = 0; doc < data.size(); doc++) {
+            int cntEnd = numModalities;
+
+            String docId = "no-name";
+            docId = data.get(doc).EntityId.toString();
+
+            for (Byte m = 0; m < cntEnd; m++) {
+                if (data.get(doc).Assignments[m] != null) {
+                    Arrays.fill(topicCounts[m], 0);
+                    LabelSequence topicSequence = (LabelSequence) data.get(doc).Assignments[m].topicSequence;
+
+                    int[] currentDocTopics = topicSequence.getFeatures();
+
+                    docLen[m] = data.get(doc).Assignments[m].topicSequence.getLength();// currentDocTopics.length;
+
+                    // Count up the tokens
+                    for (int token = 0; token < docLen[m]; token++) {
+                        topicCounts[m][currentDocTopics[token]]++;
+                    }
+                }
+            }
+
+            // And normalize
+            for (int topic = 0; topic < numTopics; topic++) {
+                double topicProportion = 0;
+                double normalizeSum = 0;
+                for (Byte m = 0; m < cntEnd; m++) {
+                    //I reweight each modality's contribution in the proportion of the document based on its discrimination power (skew index) and its relation to text
+                    topicProportion += (m == 0 ? 1 : discrWeightPerModality[m]) * pMean[0][m] * ((double) topicCounts[m][topic] + (double) gamma[m] * alpha[m][topic]) / (docLen[m] + (double) gamma[m] * alphaSum[m]);
+                    normalizeSum += (m == 0 ? 1 : discrWeightPerModality[m]) * pMean[0][m];
+                }
+                sortedTopics[topic].set(topic, (topicProportion / normalizeSum));
+            }
+
+            Arrays.sort(sortedTopics);
+            for (int i = 0; i < max; i++) {
+                if (sortedTopics[i].getWeight() < threshold) break;
+
+                int topicId = sortedTopics[i].getID();
+                double weight = (double) Math.round(sortedTopics[i].getWeight() * 10000) / 10000;
+
+                if (!docTopicMap.containsKey(docId))
+                    docTopicMap.put(docId, new HashMap<>());
+                docTopicMap.get(docId).put(topicId, weight);
+            }
+        }
+    }
+
+
     public void printDocumentTopics(PrintWriter out, double threshold, int max, String SQLConnectionString, String experimentId) {
+        Map<String, Map<Integer, Double>> docTopicMap = new HashMap<>();
+
         if (out != null) {
             out.print("#doc name topic proportion ...\n");
         }
@@ -364,9 +436,6 @@ public class FastQMVWVTopicInferencer implements Serializable {
                 bulkInsert = connection.prepareStatement(sql);
 
                 for (int doc = 0; doc < data.size(); doc++) {
-                    
-
-                                    
                     int cntEnd = numModalities;
                     StringBuilder builder = new StringBuilder();
                     builder.append(doc);
@@ -423,6 +492,13 @@ public class FastQMVWVTopicInferencer implements Serializable {
                         if (out != null) {
                             out.println(builder);
                         }
+
+                        int topicId = sortedTopics[i].getID();
+                        double weight = (double) Math.round(sortedTopics[i].getWeight() * 10000) / 10000;
+
+                        HashMap<Integer, Double> topicWeight = new HashMap<>();
+                        topicWeight.put(topicId, weight);
+                        docTopicMap.put(docId, topicWeight);
 
                         if (!SQLConnectionString.isEmpty()) {
 
@@ -585,6 +661,20 @@ public class FastQMVWVTopicInferencer implements Serializable {
         }
     }
 
+    public static FastQMVWVTopicInferencer readEntireObject(byte[] serialized){
+        try {
+        ByteArrayInputStream bi = new ByteArrayInputStream(serialized);
+        ObjectInputStream si = null;
+            si = new ObjectInputStream(bi);
+            return (FastQMVWVTopicInferencer) si.readObject();
+        } catch (IOException e) {
+            logger.error(e.getMessage());
+        } catch (ClassNotFoundException e) {
+            logger.error(e.getMessage());
+        }
+        return null;
+    }
+
     public static FastQMVWVTopicInferencer read(String SQLConnectionString, String experimentId) {
 
         FastQMVWVTopicInferencer topicModel = null;
@@ -603,15 +693,15 @@ public class FastQMVWVTopicInferencer implements Serializable {
                 ResultSet rs = statement.executeQuery(modelSelect);
                 while (rs.next()) {
                     try {
-                        byte b[] = (byte[]) rs.getObject("model");
-                        ByteArrayInputStream bi = new ByteArrayInputStream(b);
-                        ObjectInputStream si = new ObjectInputStream(bi);
-                        topicModel = (FastQMVWVTopicInferencer) si.readObject();
+                        topicModel = FastQMVWVTopicInferencer.readEntireObject((byte[])rs.getObject("model"));
+//                        byte b[] = (byte[]) rs.getObject("model");
+//                        ByteArrayInputStream bi = new ByteArrayInputStream(b);
+//                        ObjectInputStream si = new ObjectInputStream(bi);
+//                        topicModel = (FastQMVWVTopicInferencer) si.readObject();
                     } catch (Exception e) {
                         logger.error(e.getMessage());
 
                     }
-
                 }
 
 // deserialize the object

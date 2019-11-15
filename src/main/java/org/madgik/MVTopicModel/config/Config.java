@@ -127,32 +127,50 @@ public class Config extends Properties {
     boolean ignoreText;
     boolean findKeyPhrases;
 
-    String OutputDataSourceType;
-    String OutputDataSourceParams;
-    String InputDataSourceType;
+    String ModellingOutputDataSourceType;
+    String ModellingOutputDataSourceParams;
+    String ModellingInputDataSourceType;
+    String ModellingInputDataSourceParams;
     String InferenceDataSourceType;
     String InferenceDataSourceParams;
+    String InferenceOutputDataSourceType;
+    String InferenceOutputDataSourceParams;
+    String InferenceModelDataSourceType;
+    String InferenceModelDataSourceParams;
 
+    public String getInferenceModelDataSourceType() {
+        return InferenceModelDataSourceType;
+    }
+
+    public String getInferenceModelDataSourceParams() {
+        return InferenceModelDataSourceParams;
+    }
+
+
+    public String getInferenceOutputDataSourceParams(){ return InferenceOutputDataSourceParams;}
+    public String getInferenceOutputDataSourceType(){ return InferenceOutputDataSourceType;}
     public String getInferenceDataSourceParams(){ return InferenceDataSourceParams;}
-    public String getInferenceDataSourceType(){ return InferenceDataSourceParams;}
+    public String getInferenceDataSourceType(){ return InferenceDataSourceType;}
 
-    public String getOutputDataSourceType() {
-        return OutputDataSourceType;
+    public String getModellingOutputDataSourceType() {
+        return ModellingOutputDataSourceType;
     }
 
-    public String getOutputDataSourceParams() {
-        return OutputDataSourceParams;
+    public String getModellingOutputDataSourceParams() {
+        return ModellingOutputDataSourceParams;
     }
 
-    public String getInputDataSourceType() {
-        return InputDataSourceType;
+    public String getModellingInputDataSourceType() {
+        return ModellingInputDataSourceType;
     }
 
-    public String getInputDataSourceParams() {
-        return InputDataSourceParams;
+    public String getModellingInputDataSourceParams() {
+        return ModellingInputDataSourceParams;
     }
 
-    String InputDataSourceParams;
+
+
+
 
 
     ExperimentType experimentType = ExperimentType.PubMed;
@@ -195,13 +213,17 @@ public class Config extends Properties {
             pruneLblCntPerc = Double.parseDouble(prop.getProperty("PruneLblCntPerc", "0.002"));
             pruneMaxPerc = Double.parseDouble(prop.getProperty("PruneMaxPerc", "10"));
 
-            InputDataSourceType = prop.getProperty("InputDataSourceType");
-            InputDataSourceParams = prop.getProperty("InputDataSourceParams");
-            OutputDataSourceType = prop.getProperty("OutputDataSourceType");
-            OutputDataSourceParams = prop.getProperty("OutputDataSourceParams");
+            ModellingInputDataSourceType = prop.getProperty("ModellingInputDataSourceType");
+            ModellingInputDataSourceParams = prop.getProperty("ModellingInputDataSourceParams");
+            ModellingOutputDataSourceType = prop.getProperty("ModellingOutputDataSourceType");
+            ModellingOutputDataSourceParams = prop.getProperty("ModellingOutputDataSourceParams");
 
-            InferenceDataSourceParams = prop.getProperty("InputDataSourceType");
-            InferenceDataSourceType = prop.getProperty("InputDataSourceParams");
+            InferenceDataSourceParams = prop.getProperty("InferenceDataSourceParams");
+            InferenceDataSourceType = prop.getProperty("InferenceDataSourceType");
+            InferenceOutputDataSourceParams = prop.getProperty("InferenceOutputDataSourceParams");
+            InferenceOutputDataSourceType = prop.getProperty("InferenceOutputDataSourceType");
+            InferenceModelDataSourceParams = prop.getProperty("InferenceModelDataSourceParams");
+            InferenceModelDataSourceType = prop.getProperty("InferenceModelDataSourceType");
 
 
             initModelFile = prop.getProperty("initModelFile", "");

@@ -3,14 +3,16 @@ package org.madgik.MVTopicModel.io;
 import cc.mallet.types.Instance;
 import com.google.gson.Gson;
 import com.google.gson.stream.JsonReader;
+import org.madgik.MVTopicModel.FastQMVWVTopicInferencer;
 import org.madgik.MVTopicModel.FastQMVWVTopicModelDiagnostics;
 import org.madgik.MVTopicModel.config.Config;
-import org.madgik.MVTopicModel.model.DocumentTopicAssignment;
-import org.madgik.MVTopicModel.model.TopicData;
+import org.madgik.MVTopicModel.model.*;
 import org.madgik.utils.Utils;
 
+import javax.xml.bind.DatatypeConverter;
 import java.io.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -127,4 +129,87 @@ public class JsonTMDataSource extends FileTMDataSource{
     public void prepareTopicDistroTrendsOutput(String experimentId) {
 
     }
+
+
+    @Override
+    public void saveDocumentTopicAssignments(Config config, Map<String, Map<Integer, Double>> docTopicMap, String outpath) {
+        String path = getPath(outpath + ".docTopicAssignments");
+        logger.info("Saving document topic assignments" + path);
+        String experimentId = config.getExperimentId();
+        Map<String, String> data = new HashMap<>();
+        data.put("assignments", new Gson().toJson(docTopicMap));
+        data.put("experimentId", experimentId);
+        try{
+            FileWriter fr = new FileWriter(path);
+            new Gson().toJson(data, fr);
+            fr.close();
+        } catch (IOException e) {
+            logger.error(e.getMessage());
+        }
+    }
+
+    @Override
+    public FastQMVWVTopicInferencer getInferenceModel(Config config) {
+        String path = config.getInferenceModelDataSourceParams();
+        logger.info("Deserializing json: " + path);
+        Map<String, String> data = null;
+        try {
+            FileReader fr = new FileReader(path);
+            data = new Gson().fromJson(fr, Map.class);
+            return FastQMVWVTopicInferencer.readEntireObject(DatatypeConverter.parseBase64Binary(data.get("serialized_model")));
+        } catch (FileNotFoundException e) {
+            logger.error(e.getMessage());
+        }
+        return null;
+    }
+
+    @Override
+    public void deleteExistingExperiment(Config config) {
+        String experimentPath = getPath(config.getModellingOutputDataSourceParams() + ".experiment");
+        deleteFile(experimentPath);
+    }
+
+    @Override
+    public void saveTopicsAndExperiment(Config config, List<TopicAnalysis> topicAnalysisList, List<TopicDetails> topicDetailsList, byte[] serializedModel, String experimentMetadata) {
+        String path = getPath(config.getModellingOutputDataSourceParams() + ".topicsAndExperiment");
+        String experimentId = config.getExperimentId();
+        Map<String, String> data = new HashMap<>();
+        try{
+
+            logger.info("Serializing experiment and topic information to JSON");
+            data.put("serialized_model", DatatypeConverter.printBase64Binary(serializedModel));
+            data.put("topic_analysis", new Gson().toJson(topicAnalysisList));
+            data.put("topic_details", new Gson().toJson(topicDetailsList));
+            data.put("experiment_metadata", new Gson().toJson(experimentMetadata));
+            data.put("experimentId", experimentId);
+            logger.info("Saving experiment and topic information to " + path);
+            FileWriter fr = new FileWriter(path);
+            new Gson().toJson(data, fr);
+            fr.close();
+        } catch (IOException e) {
+            logger.error(e.getMessage());
+        } catch(Exception e) {
+            logger.error(e.getMessage());
+        }
+        logger.info("Saved experiment and topic information to " + path);
+
+    }
+
+    @Override
+    public void saveDiagnostics(Config config, List<Score> scores) {
+        String path = getPath(config.getModellingOutputDataSourceParams() + ".diagnostics");
+        Map<String, String> data = new HashMap<>();
+        try{
+
+            logger.info("Serializing diagnostics information to JSON:" + path);
+            data.put("diagnostics", new Gson().toJson(scores));
+            FileWriter fr = new FileWriter(path);
+            new Gson().toJson(data, fr);
+            fr.close();
+        } catch (IOException e) {
+            logger.error(e.getMessage());
+        }
+        logger.info("Saved diagnostics information to JSON");
+    }
+
 }

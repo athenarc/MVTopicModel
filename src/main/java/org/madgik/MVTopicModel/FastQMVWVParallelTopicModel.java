@@ -1,6 +1,8 @@
 package org.madgik.MVTopicModel;
 
 import cc.mallet.pipe.Pipe;
+import org.madgik.MVTopicModel.model.TopicAnalysis;
+import org.madgik.MVTopicModel.model.TopicDetails;
 import org.madgik.utils.FastQDelta;
 import org.madgik.utils.MixTopicModelTopicAssignment;
 import org.madgik.utils.FTree;
@@ -221,9 +223,6 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         formatter = NumberFormat.getInstance();
         formatter.setMaximumFractionDigits(5);
 
-        logger.info("FastQMV LDANumTopics: " + numTopics + ", Modalities: " + this.numModalities + ", Iterations: " + this.numIterations);
-
-        appendMetadata("Initial NumTopics: " + numTopics + ", Modalities: " + this.numModalities + ", Iterations: " + this.numIterations);
 
         p_a = new double[numModalities][numModalities];
         p_b = new double[numModalities][numModalities];
@@ -1032,6 +1031,9 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 //    }
     public void estimate() throws IOException {
 
+        logger.info("FastQMV- estimating with LDANumTopics: " + numTopics + ", Modalities: " + this.numModalities + ", Iterations: " + this.numIterations);
+        appendMetadata("Initial NumTopics: " + numTopics + ", Modalities: " + this.numModalities + ", Iterations: " + this.numIterations);
+
         long startTime = System.currentTimeMillis();
         int nst = 3 * numThreads / 4; //number of sampling threads
         int nut = numThreads / 4; // number of model updating threads 
@@ -1497,6 +1499,185 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             logger.info("Vectors Saved");
         }
 
+    }
+
+    public Map<String, Map<Integer, Double>> getDocTopicMap() {
+        return docTopicMap;
+    }
+
+    Map<String, Map<Integer, Double>> docTopicMap;
+
+    public void computeDocumentAssignments(double threshold){
+        docTopicMap = new HashMap<>();
+
+        int max = -1;
+        if (max < 0 || max > numTopics) max = numTopics;
+
+        int[] docLen = new int[numModalities];
+
+        int[][] topicCounts = new int[numModalities][numTopics];
+
+        IDSorter[] sortedTopics = new IDSorter[numTopics];
+        for (int topic = 0; topic < numTopics; topic++) {
+            // Initialize the sorters with dummy values
+            sortedTopics[topic] = new IDSorter(topic, topic);
+        }
+
+        for (int doc = 0; doc < data.size(); doc++) {
+            int cntEnd = numModalities;
+
+            String docId = "no-name";
+            docId = data.get(doc).EntityId.toString();
+
+            for (Byte m = 0; m < cntEnd; m++) {
+                if (data.get(doc).Assignments[m] != null) {
+                    Arrays.fill(topicCounts[m], 0);
+                    LabelSequence topicSequence = (LabelSequence) data.get(doc).Assignments[m].topicSequence;
+
+                    int[] currentDocTopics = topicSequence.getFeatures();
+
+                    docLen[m] = data.get(doc).Assignments[m].topicSequence.getLength();// currentDocTopics.length;
+
+                    // Count up the tokens
+                    for (int token = 0; token < docLen[m]; token++) {
+                        topicCounts[m][currentDocTopics[token]]++;
+                    }
+                }
+            }
+
+            // And normalize
+            for (int topic = 0; topic < numTopics; topic++) {
+                double topicProportion = 0;
+                double normalizeSum = 0;
+                for (Byte m = 0; m < cntEnd; m++) {
+                    //I reweight each modality's contribution in the proportion of the document based on its discrimination power (skew index) and its relation to text
+                    topicProportion += (m == 0 ? 1 : discrWeightPerModality[m]) * pMean[0][m] * ((double) topicCounts[m][topic] + (double) gamma[m] * alpha[m][topic]) / (docLen[m] + (double) gamma[m] * alphaSum[m]);
+                    normalizeSum += (m == 0 ? 1 : discrWeightPerModality[m]) * pMean[0][m];
+                }
+                sortedTopics[topic].set(topic, (topicProportion / normalizeSum));
+            }
+
+            Arrays.sort(sortedTopics);
+            for (int i = 0; i < max; i++) {
+                if (sortedTopics[i].getWeight() < threshold) break;
+
+                int topicId = sortedTopics[i].getID();
+                double weight = (double) Math.round(sortedTopics[i].getWeight() * 10000) / 10000;
+
+                HashMap<Integer, Double> topicWeight = new HashMap<>();
+                topicWeight.put(topicId, weight);
+                docTopicMap.put(docId, topicWeight);
+            }
+        }
+    }
+
+
+
+    public void calcTopicAnalysis(){
+
+        topicAnalysisList = new ArrayList<>();
+        discrWeightPerModality = calcDiscrWeightAcrossTopicsPerModality();
+        // topic analysis
+        ArrayList<ArrayList<TreeSet<IDSorter>>> topicSortedWords = new ArrayList<ArrayList<TreeSet<IDSorter>>>(numModalities);
+
+        for (Byte m = 0; m < numModalities; m++) {
+            topicSortedWords.add(getSortedWords(m));
+        }
+
+        for (int topic = 0; topic < numTopics; topic++) {
+            for (Byte m = 0; m < numModalities; m++) {
+
+                TreeSet<IDSorter> sortedWords = topicSortedWords.get(m).get(topic);
+
+                int word = 1;
+                Iterator<IDSorter> iterator = sortedWords.iterator();
+
+                //int activeNumWords = Math.min(40, 7 * (int) Math.round(topicsDiscrWeight[m][topic] * topicTypeCount));
+                while (iterator.hasNext() && word < 50) {
+                    IDSorter info = iterator.next();
+                    TopicAnalysis ta = new TopicAnalysis(topic, m, alphabet[m].lookupObject(info.getID()).toString(), info.getWeight());
+                    topicAnalysisList.add(ta);
+                    word++;
+                }
+            }
+        }
+        // also find and write phrases
+        TObjectIntHashMap<String>[] phrases = findTopicPhrases();
+
+        for (int ti = 0; ti < numTopics; ti++) {
+
+            // Print phrases
+            Object[] keys = phrases[ti].keys();
+            int[] values = phrases[ti].values();
+            double counts[] = new double[keys.length];
+            for (int i = 0; i < counts.length; i++) {
+                counts[i] = values[i];
+            }
+            // double countssum = MatrixOps.sum(counts);
+            Alphabet alph = new Alphabet(keys);
+            RankedFeatureVector rfv = new RankedFeatureVector(alph, counts);
+            int max = rfv.numLocations() < 20 ? rfv.numLocations() : 20;
+            for (int ri = 0; ri < max; ri++) {
+                int fi = rfv.getIndexAtRank(ri);
+
+                double count = counts[fi];// / countssum;
+                String phraseStr = alph.lookupObject(fi).toString();
+                TopicAnalysis ta = new TopicAnalysis(ti, -1, phraseStr, count);
+                topicAnalysisList.add(ta);
+            }
+        }
+    }
+    byte[] SerializedModel;
+
+    public List<TopicAnalysis> getTopicAnalysisList() {
+        return topicAnalysisList;
+    }
+
+    public List<TopicDetails> getTopicDetailsList() {
+        return topicDetailsList;
+    }
+
+    List<TopicDetails> topicDetailsList = new ArrayList<>();
+    List<org.madgik.MVTopicModel.model.TopicAnalysis> topicAnalysisList;
+
+    public void serializeModel(){
+        FastQMVWVTopicInferencer inferencer = this.getInferencer();
+        try {
+            ByteArrayOutputStream bo = new ByteArrayOutputStream();
+            ObjectOutputStream so = new ObjectOutputStream(bo);
+            so.writeObject(inferencer);
+            //so.flush();
+            SerializedModel = bo.toByteArray();
+
+        } catch (Exception e) {
+            logger.error(e.getMessage());
+
+        }
+    }
+    public byte[] getSerializedModel(){
+        return SerializedModel;
+    }
+
+    public String getExperimentMetadata(){
+        return expMetadata.toString();
+    }
+
+    public void calcTopicDetails(){
+        for (int topic = 0; topic < numTopics; topic++) {
+            for (Byte m = 0; m < numModalities; m++) {
+                TopicDetails td = new TopicDetails(topic, tokensPerTopic[m].get(topic), m, alpha[m][topic]);
+                topicDetailsList.add(td);
+            }
+        }
+    }
+
+    public void doPostEstimationCalculations(){
+        logger.info("Calculating topic analysis");
+        calcTopicAnalysis();
+        logger.info("Calculating topic details");
+        calcTopicDetails();
+        logger.info("Serializing model");
+        serializeModel();
     }
 
     public void saveTopicsandExperiment(String SQLConnectionString, String experimentId, String batchId, String experimentDescription) {

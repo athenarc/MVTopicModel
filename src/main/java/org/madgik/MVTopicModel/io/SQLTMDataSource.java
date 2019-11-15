@@ -1,12 +1,10 @@
 package org.madgik.MVTopicModel.io;
 
 import cc.mallet.types.Instance;
+import org.madgik.MVTopicModel.FastQMVWVTopicInferencer;
 import org.madgik.MVTopicModel.FastQMVWVTopicModelDiagnostics;
 import org.madgik.MVTopicModel.SciTopicFlow;
-import org.madgik.MVTopicModel.model.Modality;
-import org.madgik.MVTopicModel.model.TopicData;
-import org.madgik.MVTopicModel.model.LightDocument;
-import org.madgik.MVTopicModel.model.DocumentTopicAssignment;
+import org.madgik.MVTopicModel.model.*;
 import org.madgik.utils.Utils;
 import org.madgik.MVTopicModel.config.*;
 import org.madgik.MVTopicModel.config.Config.ExperimentType;
@@ -24,7 +22,7 @@ public class SQLTMDataSource extends TMDataSource {
 
     Connection connection;
     String jdbcString;
-    public static final String name = "SQL";
+    public static final String name = "sql";
     Logger LOGGER = Logger.getLogger(SciTopicFlow.LOGGERNAME);
 
     public SQLTMDataSource(String properties) {
@@ -537,6 +535,312 @@ public class SQLTMDataSource extends TMDataSource {
 
     }
 
+    @Override
+    public void saveDocumentTopicAssignments(Config config, Map<String, Map<Integer, Double>> docTopicMap, String runType) {
+        String experimentId = config.getExperimentId();
+        String sql = "insert into doc_topic values(?,?,?,?,?);";
+        PreparedStatement bulkInsert = null;
+        try {
+            getConnection().setAutoCommit(false);
+            bulkInsert = getConnection().prepareStatement(sql);
+            for (String docId : docTopicMap.keySet()) {
+                // delete existing
+                PreparedStatement deletePrevious = getConnection().prepareStatement(String.format("Delete from doc_topic where  ExperimentId = '%s' and docid='%s' ", experimentId, docId));
+                deletePrevious.executeUpdate();
+
+                for (Integer topicId : docTopicMap.get(docId).keySet()) {
+                    Double weight = docTopicMap.get(docId).get(topicId);
+                    bulkInsert.setString(1, docId);
+                    bulkInsert.setInt(2, topicId);
+                    bulkInsert.setDouble(3, weight);
+                    bulkInsert.setString(4, experimentId);
+                    bulkInsert.setBoolean(5, true);
+                    bulkInsert.executeUpdate();
+                }
+            }
+
+            getConnection().setAutoCommit(true);
+        } catch (SQLException e) {
+            logger.error(e.getMessage());
+        }
+    }
+
+    @Override
+    public FastQMVWVTopicInferencer getInferenceModel(Config config) {
+        FastQMVWVTopicInferencer topicModel = null;
+        String experimentId = config.getExperimentId();
+        Statement statement;
+        try {
+            // create a database connection
+                statement = getConnection().createStatement();
+                String modelSelect = String.format("select model from inferencemodel "
+                        + "where experimentid = '%s' \n",
+                        experimentId);
+
+                boolean loaded = false;
+                ResultSet rs = statement.executeQuery(modelSelect);
+                while (rs.next()) {
+                    if (loaded){
+                       logger.error("Found more than one model for experiment " + experimentId);
+                       return null;
+                    }
+                    try {
+                        byte b[] = (byte[]) rs.getObject("model");
+                        ByteArrayInputStream bi = new ByteArrayInputStream(b);
+                        ObjectInputStream si = new ObjectInputStream(bi);
+                        topicModel = (FastQMVWVTopicInferencer) si.readObject();
+                    } catch (Exception e) {
+                        logger.error(e.getMessage());
+                    }
+                    loaded = true;
+                }
+        } catch (SQLException e) {
+            logger.error(e.getMessage());
+        } finally {
+            try {
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                // connection close failed.
+                logger.error(e.getMessage());
+            }
+        }
+        return topicModel;
+    }
+
+    @Override
+    public void deleteExistingExperiment(Config config) {
+        String experimentId = config.getExperimentId();
+        logger.info("Deleting previous experiment" + experimentId);
+        try {
+            // create a database connection
+            Statement statement = getConnection().createStatement();
+            statement.executeUpdate(String.format("Delete from doc_topic where  ExperimentId = '%s'", experimentId));
+
+            String deleteSQL = String.format("Delete from Experiment where  ExperimentId = '%s'", experimentId);
+            statement.executeUpdate(deleteSQL);
+
+            deleteSQL = String.format("Delete from TopicDetails where  ExperimentId = '%s'", experimentId);
+            statement.executeUpdate(deleteSQL);
+
+            deleteSQL = String.format("Delete from Topic where  ExperimentId = '%s'", experimentId);
+            statement.executeUpdate(deleteSQL);
+
+            deleteSQL = String.format("Delete from TopicAnalysis where  ExperimentId = '%s'", experimentId);
+            statement.executeUpdate(deleteSQL);
+
+            deleteSQL = String.format("Delete from ExpDiagnostics where  ExperimentId = '%s'", experimentId);
+            statement.executeUpdate(deleteSQL);
+        } catch (SQLException e) {
+            // if the error message is "out of memory",
+            // it probably means no database file is found
+            System.err.println(e.getMessage());
+        } finally {
+            try {
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                // connection close failed.
+                System.err.println(e);
+            }
+
+        }
+    }
+
+
+    @Override
+    public void saveTopicsAndExperiment(Config config, List<TopicAnalysis> topicAnalysisList, List<TopicDetails> topicDetailsList, byte[] serializedModel, String experimentMetadata) {
+
+        Statement statement = null;
+        try {
+            PreparedStatement bulkInsert = null;
+            String sql = "insert into TopicAnalysis values(?,?,?,?,?,?);";
+
+            try {
+                getConnection().setAutoCommit(false);
+                // store topic analysis
+                bulkInsert = getConnection().prepareStatement(sql);
+                for (TopicAnalysis ta : topicAnalysisList){
+                    bulkInsert.setInt(1, ta.getTopicId());
+                    bulkInsert.setInt(2, ta.getModality());
+                    bulkInsert.setString(3, ta.getItem());
+                    bulkInsert.setDouble(4, ta.getWeight());
+                    bulkInsert.setString(5, "");
+                    bulkInsert.setString(6, config.getExperimentId());
+                    //bulkInsert.setDouble(6, 1);
+                    bulkInsert.executeUpdate();
+
+                }
+                connection.commit();
+                } catch (SQLException e) {
+
+                    logger.error("Exception in save Topics: " + e.getMessage());
+                    //System.err.print(e.getMessage());
+                    if (connection != null) {
+                        try {
+                            logger.error("Transaction is being rolled back");
+                            connection.rollback();
+                        } catch (SQLException excep) {
+                            logger.error("Error in insert topicAnalysis");
+                        }
+                    }
+                } finally {
+
+                    if (bulkInsert != null) {
+                        bulkInsert.close();
+                    }
+                    connection.setAutoCommit(true);
+                }
+
+
+            // boost
+            statement = connection.createStatement();
+            String boostSelect = String.format("select  \n"
+                    + " a.experimentid, PhraseCnts, textcnts, textcnts/phrasecnts as boost\n"
+                    + "from \n"
+                    + "(select experimentid, itemtype, avg(counts) as PhraseCnts from topicanalysis\n"
+                    + "where itemtype=-1\n"
+                    + "group by experimentid, itemtype) a inner join\n"
+                    + "(select experimentid, itemtype, avg(counts) as textcnts from topicanalysis\n"
+                    + "where itemtype=0  and ExperimentId = '%s' \n"
+                    + "group by experimentid, itemtype) b on a.experimentId=b.experimentId\n"
+                    + "order by a.experimentId;", config.getExperimentId());
+            float boost = 70;
+            ResultSet rs = statement.executeQuery(boostSelect);
+            while (rs.next()) {
+                boost = rs.getFloat("boost");
+            }
+
+            sql = "insert into Experiment (ExperimentId  ,    Description,    Metadata  ,    InitialSimilarity,    PhraseBoost, ended) values(?,?,?, ?, ?,?);";
+
+            try {
+                connection.setAutoCommit(false);
+
+                bulkInsert = connection.prepareStatement(sql);
+
+                LocalDateTime now = LocalDateTime.now();
+                Timestamp timestamp = Timestamp.valueOf(now);
+
+                bulkInsert.setString(1, config.getExperimentId());
+                bulkInsert.setString(2, config.getExperimentDetails());
+                bulkInsert.setString(3, experimentMetadata);
+                bulkInsert.setDouble(4, 0.6);
+                bulkInsert.setInt(5, Math.round(boost));
+                bulkInsert.setTimestamp(6, timestamp);
+                bulkInsert.executeUpdate();
+                connection.commit();
+
+                sql = "insert into inferencemodel (ExperimentId, model) values(?,?);";
+                bulkInsert = connection.prepareStatement(sql);
+                bulkInsert.setString(1, config.getExperimentId());
+                ByteArrayInputStream bais = new ByteArrayInputStream(serializedModel);
+                bulkInsert.setBinaryStream(2, bais);
+                bulkInsert.executeUpdate();
+
+                connection.commit();
+
+            } catch (SQLException e) {
+
+                logger.error("Exception in save Topics: " + e.getMessage());
+                if (connection != null) {
+                    try {
+
+                        logger.error("Transaction is being rolled back");
+                        connection.rollback();
+                    } catch (SQLException excep) {
+                        logger.error("Error in insert experiment details");
+                    }
+                }
+            } finally {
+
+                if (bulkInsert != null) {
+                    bulkInsert.close();
+                }
+                connection.setAutoCommit(true);
+            }
+
+            try {
+
+                String insertTopicDescriptionSql = "INSERT into Topic (Title, Category, id , VisibilityIndex, ExperimentId )\n"
+                        + "select substr(string_agg(Item,','),1,100), '' , topicId , 1, '" + config.getExperimentId() + "' \n"
+                        + "from  Topic_View\n"
+                        + " where experimentID = '" + config.getExperimentId() + "' \n"
+                        + " GROUP BY TopicID";
+
+                statement = getConnection().createStatement();
+                statement.executeUpdate(insertTopicDescriptionSql);
+                //ResultSet rs = statement.executeQuery(sql);
+
+            } catch (SQLException e) {
+                // if the error message is "out of memory",
+                // it probably means no database file is found
+                logger.error("Exception in save Topics: " + e.getMessage());
+            } finally {
+                /*try {
+                    if (connection != null) {
+                        connection.close();
+                    }
+                } catch (SQLException e) {
+                    // connection close failed.
+                    LOGGER.error(e);
+                }
+                 */
+            }
+
+            // topic details
+            String topicDetailInsertsql = "insert into TopicDetails values(?,?,?,?,?,? );";
+            PreparedStatement bulkTopicDetailInsert = null;
+            try {
+                bulkTopicDetailInsert = connection.prepareStatement(topicDetailInsertsql);
+                connection.setAutoCommit(false);
+                for (TopicDetails td: topicDetailsList){
+                        bulkTopicDetailInsert.setInt(1, td.getTopicId());
+                        bulkTopicDetailInsert.setInt(2, td.getModality());
+                        bulkTopicDetailInsert.setDouble(3, td.getWeight());
+                        bulkTopicDetailInsert.setInt(4, td.getTotalTokens());
+                        bulkTopicDetailInsert.setString(5, "");
+                        bulkTopicDetailInsert.setString(6, config.getExperimentId());
+                        bulkTopicDetailInsert.executeUpdate();
+                }
+                connection.commit();
+
+            } catch (SQLException e) {
+                logger.error("Exception in save Topic details: " + e.getMessage());
+
+                if (connection != null) {
+                    try {
+                        logger.error("Transaction is being rolled back");
+                        connection.rollback();
+                    } catch (SQLException excep) {
+                        logger.error("Error in insert topic details");
+                    }
+                }
+            } finally {
+
+                if (bulkTopicDetailInsert != null) {
+                    bulkTopicDetailInsert.close();
+                }
+                connection.setAutoCommit(true);
+            }
+
+        } catch (SQLException e) {
+            // if the error message is "out of memory",
+            // it probably means no database file is found
+            System.err.println(e.getMessage());
+        } finally {
+            try {
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                // connection close failed.
+                System.err.println(e);
+            }
+        }
+    }
+
     public ArrayList<ArrayList<Instance>> getInferenceInputs(Config config) {
         return null;
     }
@@ -548,7 +852,7 @@ public class SQLTMDataSource extends TMDataSource {
         String SQLConnection = jdbcString;
         int limitDocs = config.getLimitDocs();
         ExperimentType experimentType = config.getExperimentType();
-        String filter = " where batchid > 'batchid'";
+        String filter = " where batchid > '2018'";
         int numChars = config.getNumChars();
 
         for (byte m = 0; m < numModalities; m++) instanceBuffer.add(new ArrayList<>());
@@ -970,6 +1274,49 @@ public class SQLTMDataSource extends TMDataSource {
             res.get(topic_id).put(document_id, weight);
         }
         return res;
+    }
+
+    public void saveDiagnostics(Config config, List<Score> scores){
+        Connection connection = null;
+        String current_score = "";
+        try {
+
+            PreparedStatement bulkInsert = null;
+            String sql = "insert into expDiagnostics values(?,?,?,?,?,?);";
+
+            connection.setAutoCommit(false);
+            bulkInsert = connection.prepareStatement(sql);
+            for(Score sc : scores){
+                bulkInsert.setString(1, config.getExperimentId());
+                bulkInsert.setString(2, "01");
+                bulkInsert.setString(3, sc.getId());
+                bulkInsert.setInt(4, sc.getScoreType().ordinal()); //corpus
+                bulkInsert.setString(5, sc.getName());
+                bulkInsert.setDouble(6, sc.getValue());
+                bulkInsert.executeUpdate();
+
+            }
+            connection.commit();
+            if (bulkInsert != null) {
+                bulkInsert.close();
+            }
+            connection.setAutoCommit(true);
+
+        } catch (SQLException e) {
+
+            logger.error("Exception in save diagnostics score ["+ current_score +"] : "+ e.getMessage());
+
+            if (connection != null) {
+                try {
+                    logger.error("Transaction is being rolled back \n");
+                    connection.rollback();
+                } catch (SQLException excep) {
+                    logger.error("Error in insert expDiagnostics \n");
+                }
+            }
+        } finally {
+        }
+
     }
 
 

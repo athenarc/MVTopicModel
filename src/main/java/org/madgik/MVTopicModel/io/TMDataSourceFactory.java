@@ -12,13 +12,13 @@ public class TMDataSourceFactory {
     public static TMDataSource instantiate(String type, String params){
         Logger logger = Logger.getLogger(SciTopicFlow.LOGGERNAME);
         try {
-            if (type.equals(SQLTMDataSource.name)) {
+            if (type.toLowerCase().equals(SQLTMDataSource.name)) {
                 return new SQLTMDataSource(params);
             }
-            else if (type.equals(SerializedFileTMDataSource.name)) {
+            else if (type.toLowerCase().equals(SerializedFileTMDataSource.name)) {
                 return new SerializedFileTMDataSource(params);
             }
-            else if (type.equals(JsonTMDataSource.name)) {
+            else if (type.toLowerCase().equals(JsonTMDataSource.name)) {
                     return new JsonTMDataSource(params);
             } else {
                 logger.error("Undefined data source type " + type);

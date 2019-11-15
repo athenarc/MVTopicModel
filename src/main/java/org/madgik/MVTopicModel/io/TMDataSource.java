@@ -4,12 +4,13 @@ import cc.mallet.types.Instance;
 import edu.stanford.nlp.util.Quadruple;
 import edu.stanford.nlp.util.Triple;
 import org.apache.log4j.Logger;
+import org.madgik.MVTopicModel.FastQMVWVTopicInferencer;
 import org.madgik.MVTopicModel.FastQMVWVTopicModelDiagnostics;
 import org.madgik.MVTopicModel.SciTopicFlow;
 import org.madgik.MVTopicModel.config.Config;
-import org.madgik.MVTopicModel.model.DocumentTopicAssignment;
-import org.madgik.MVTopicModel.model.TopicData;
+import org.madgik.MVTopicModel.model.*;
 
+import java.io.ObjectInputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -47,7 +48,12 @@ public abstract class TMDataSource {
     // post-analysis
     public abstract void prepareTopicDistroTrendsOutput(String experimentId);
 
+    public abstract void saveDocumentTopicAssignments(Config config, Map<String, Map<Integer, Double>> docTopicMap, String runType);
+    public abstract FastQMVWVTopicInferencer getInferenceModel(Config config);
+    public abstract void deleteExistingExperiment(Config config);
 
+    public abstract void saveTopicsAndExperiment(Config config, List<TopicAnalysis> topicAnalysisList, List<TopicDetails> topicDetailsList, byte[] serializedModel, String experimentMetadata);
 
+    public abstract void saveDiagnostics(Config config, List<Score> scores);
 
 }

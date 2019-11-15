@@ -12,6 +12,7 @@ import org.madgik.MVTopicModel.config.Config;
 import org.madgik.MVTopicModel.io.TMDataSource;
 import org.madgik.MVTopicModel.io.TMDataSourceFactory;
 import org.madgik.utils.CSV2FeatureSequence;
+import org.madgik.MVTopicModel.config.Config.ExperimentType;
 
 import java.io.*;
 import java.sql.*;
@@ -20,13 +21,6 @@ import java.util.*;
 import static org.madgik.utils.Utils.cosineSimilarity;
 
 public class SciTopicFlow {
-
-    public enum ExperimentType {
-
-        ACM,
-        PubMed
-
-    }
 
     public enum SimilarityType {
 
@@ -55,7 +49,7 @@ public class SciTopicFlow {
     private int numChars = 4000;
     private int burnIn = 50;
     private int optimizeInterval = 50;
-    private  ExperimentType experimentType = ExperimentType.PubMed;
+    private Config.ExperimentType experimentType = Config.ExperimentType.PubMed;
 
     private double pruneCntPerc = 0.002;    //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
     private double pruneLblCntPerc = 0.002;   //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
@@ -66,8 +60,8 @@ public class SciTopicFlow {
     private boolean calcEntitySimilarities = false;
     private boolean calcTopicSimilarities = false;
     private boolean calcPPRSimilarities = false;
-    private boolean runTopicModelling = true;
-    private boolean runInference = true;
+    private boolean runTopicModelling = false; private boolean runInference = true;
+//    private boolean runTopicModelling = true; private boolean runInference = false;
     private boolean runWordEmbeddings = false;
     private boolean useTypeVectors = false;
     private boolean trainTypeVectors = false;
@@ -94,13 +88,8 @@ public class SciTopicFlow {
 
         String dictDir = "";
         Connection connection = null;
-        getPropValues(runtimeProp);
-
-        String experimentString = experimentType.toString() + "_" + numTopics + "T_"
-                + numIterations + "IT_" + numChars + "CHRs_" + numModalities + "M_" + (trainTypeVectors ? "WV" : "") + ((limitDocs > 0) ? ("Lmt_" + limitDocs) : "") + PPRenabled.name();
-
-        String experimentDetails = String.format("Multi View Topic Modeling Analysis \n pruneMaxPerc:%.1f  pruneCntPerc:%.4f pruneLblCntPerc:%.4f burnIn:%d numOfThreads:%d similarityType:%s", this.pruneMaxPerc, pruneCntPerc, pruneLblCntPerc, burnIn, numOfThreads, similarityType.toString());
-
+        String experimentString = config.makeExperimentString();
+        config.makeExperimentDetails();
         String experimentDescription = experimentString + ": \n";
 
         if (runtimeProp != null) {
@@ -141,199 +130,141 @@ public class SciTopicFlow {
         }
 
         if (runTopicModelling) {
+            runTopicModelling(config);
+        }
 
+        if (runInference)
+            runInference(config);
+
+        if (calcTopicDistributionsAndTrends) {
+
+            CalcEntityTopicDistributionsAndTrends(SQLConnectionString, experimentId);
+
+        }
+
+        if (calcEntitySimilarities) {
+
+            calcSimilarities(SQLConnectionString, experimentType, experimentId, ACMAuthorSimilarity, similarityType, numTopics);
+
+        }
+
+        if (calcTopicSimilarities) {
+            experimentId = "HEALTHTenderPM_500T_600IT_7000CHRs_10.0 3.0E-4_2.0E-4PRN50B_4M_4TH_cosOneWay";
+            CalcTopicSimilarities(SQLConnectionString, experimentId);
+        }
+
+        if (calcPPRSimilarities) {
+            calcPPRSimilarities(SQLConnectionString);
+        }
+
+            Logger.getLogger(SciTopicFlow.LOGGERNAME).info("SciTopicFlow done.");
+        }
+
+
+        void runTopicModelling(Config config) throws IOException {
+            int numModalities = config.getNumModalities();
             LOGGER.info(" TopicModelling has started");
-            String batchId = "-1";
 
-            String filter = " document.batchid > '2018' ";
-            TMDataSource inputDS = TMDataSourceFactory.instantiate(config.getInputDataSourceType(), config.getInputDataSourceParams());
+            // input data
+            TMDataSource inputDS = TMDataSourceFactory.instantiate(config.getModellingInputDataSourceType(), config.getModellingInputDataSourceParams());
             ArrayList<ArrayList<Instance>> instanceBuffer = inputDS.getModellingInputs(config);
 
-//            try{
-//                ObjectInputStream in = new ObjectInputStream(new FileInputStream("/home/nik/athena/code/MVTopicModel_metaxas/src/main/java/org/madgik/MVTopicModel/instances." + limitDocs + ".serialized"));
-//                instanceBuffer =  (ArrayList<ArrayList<Instance>>) in.readObject();
-//                System.out.println("Deserialized!");
-//            } catch (IOException e) {
-//                // e.printStackTrace();
-//                instanceBuffer = ReadDataFromDB(SQLConnectionString, experimentType, numModalities, limitDocs, filter);
-//
-//                ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream("/home/nik/athena/code/MVTopicModel_metaxas/src/main/java/org/madgik/MVTopicModel/instances." + limitDocs + ".serialized"));
-//                out.writeObject(instanceBuffer);
-//                out.close();
-//                System.out.println("Serialized!");
-//
-//            } catch (ClassNotFoundException e) {
-//                e.printStackTrace();
-//            }
-
-            InstanceList[] instances = ImportInstancesWithNewPipes(instanceBuffer, experimentType, numModalities,
-                    pruneCntPerc, pruneLblCntPerc, pruneMaxPerc, false, (experimentType == ExperimentType.PubMed) ? ";" : ",");
-
+            InstanceList[] instances = ImportInstancesWithNewPipes(instanceBuffer, config.getExperimentType(), config.getNumModalities(),
+                    config.getPruneCntPerc(), config.getPruneLblCntPerc(), config.getPruneMaxPerc(), false,
+                    (config.getExperimentType() == ExperimentType.PubMed) ? ";" : ",");
             LOGGER.info("Instances added through pipe");
 
+            // model init
             double beta = 0.01;
             double[] betaMod = new double[numModalities];
             Arrays.fill(betaMod, 0.01);
             boolean useCycleProposals = false;
             double alpha = 0.1;
-
             double[] alphaSum = new double[numModalities];
             Arrays.fill(alphaSum, 1);
-
             double[] gamma = new double[numModalities];
             Arrays.fill(gamma, 1);
-
-            //double gammaRoot = 4;
-            FastQMVWVParallelTopicModel model = new FastQMVWVParallelTopicModel(numTopics, numModalities, alpha, beta, useCycleProposals, SQLConnectionString, useTypeVectors, useTypeVectorsProb, trainTypeVectors);
+            FastQMVWVParallelTopicModel model = new FastQMVWVParallelTopicModel(config.getNumTopics(), (byte) numModalities, alpha, beta,
+                    useCycleProposals, config.getModellingInputDataSourceParams(), useTypeVectors, useTypeVectorsProb, trainTypeVectors);
             model.setSaveSerializedModel(50, "experimentId.model");
-
-            model.DeletePreviousExperiment(SQLConnectionString, experimentId);
-
-            // ParallelTopicModel model = new ParallelTopicModel(numTopics, 1.0, 0.01);
-            model.setNumIterations(numIterations);
-            model.setTopicDisplay(showTopicsInterval, topWords);
+            model.setNumIterations(config.getNumIterations());
+            model.setTopicDisplay(config.getShowTopicsInterval(), config.getNumTopWords());
             // model.setIndependentIterations(independentIterations);
             model.optimizeInterval = optimizeInterval;
             model.burninPeriod = burnIn;
-            model.setNumThreads(numOfThreads);
-
-            model.addInstances(instances, batchId, vectorSize, null);//trainingInstances);//instances);
+            model.setNumThreads(config.getNumOfThreads());
+            model.addInstances(instances, "-1", vectorSize, null);//trainingInstances);//instances);
             LOGGER.info(" instances added");
 
-            //model.readWordVectorsDB(SQLConnectionString, vectorSize);
+            LOGGER.info("Deleting previous experiment");
+            TMDataSource output = TMDataSourceFactory.instantiate(config.getModellingOutputDataSourceType(), config.getModellingOutputDataSourceParams());
+            output.deleteExistingExperiment(config);
+            // model.DeletePreviousExperiment(config.getModellingOutputDataSourceParams(), config.getExperimentId());
+
             model.estimate();
             LOGGER.info("Model estimated");
+            model.doPostEstimationCalculations();
 
-            model.saveResults(SQLConnectionString, experimentId, experimentDetails);
+            output.saveTopicsAndExperiment(config, model.getTopicAnalysisList(), model.getTopicDetailsList(), model.getSerializedModel(), model.getExperimentMetadata());
+            model.computeDocumentAssignments(0.03);
+            output.saveDocumentTopicAssignments(config, model.getDocTopicMap(), config.getModellingOutputDataSourceParams());
+            // model.saveResults(config.getModellingInputDataSourceParams(), config.getExperimentId(), config.getExperimentDetails());
             LOGGER.info("Model saved");
 
-            LOGGER.info("Model Id: \n" + experimentId);
+            LOGGER.info("Model Id: \n" + config.getExperimentId());
             LOGGER.info("Model Metadata: \n" + model.getExpMetadata());
 
             //if (modelEvaluationFile != null) {
             try {
 
-                double perplexity = 0;
-
-                FastQMVWVTopicModelDiagnostics diagnostics = new FastQMVWVTopicModelDiagnostics(model, topWords);
-                diagnostics.saveToDB(SQLConnectionString, experimentId, perplexity, batchId);
+                FastQMVWVTopicModelDiagnostics diagnostics = new FastQMVWVTopicModelDiagnostics(model, config.getNumTopWords());
+                diagnostics.calcBundledScores();
+                output.saveDiagnostics(config, diagnostics.getBundledScores());
+                // diagnostics.saveToDB(config.getModellingInputDataSourceParams(), experimentId, perplexity, "-1");
                 LOGGER.info("full diagnostics calculation finished");
 
             } catch (Exception e) {
-
                 LOGGER.error(e.getMessage());
             }
-
         }
 
-        if (runInference) {
+        void runInference(Config config) throws IOException {
 
-            LOGGER.info(" Inference on new docs has started");
-            String batchId = "-1";
+                LOGGER.info("Inference on new docs has started");
+                String batchId = "-1";
 
-            FastQMVWVTopicInferencer inferencer = null;
-            /*
-            String inferencerFilename = "";
+                LOGGER.info("Loading inference model");
+                FastQMVWVTopicInferencer inferencer = null;
+                TMDataSource infModelDS = TMDataSourceFactory.instantiate(config.getInferenceModelDataSourceType(), config.getInferenceModelDataSourceParams());
+                inferencer = infModelDS.getInferenceModel(config);
+                LOGGER.info("Loaded inference model");
 
-            if (!inferencerFilename.isEmpty()) {
 
-                try {
-                    inferencer = FastQMVWVTopicInferencer.read(new File(inferencerFilename));
-                } catch (Exception e) {
-                    LOGGER.error("Unable to restore saved topic model "
-                            + inferencerFilename + ": " + e);
+//                try {
+//                    LOGGER.info("Deserializing topic model from experiment " + experimentId);
+//                    inferencer = FastQMVWVTopicInferencer.read(SQLConnectionString, experimentId);
+//                } catch (Exception e) {
+//                    LOGGER.error("Unable to restore saved topic model "
+//                            + experimentId + ": " + e);
+//
+//                }
 
-                }
-            }
-            */
-            
-          
 
-                try {
-                    inferencer = FastQMVWVTopicInferencer.read(SQLConnectionString, experimentId);
-                } catch (Exception e) {
-                    LOGGER.error("Unable to restore saved topic model "
-                            + experimentId + ": " + e);
-
-                }
-          
-
+                LOGGER.info("Getting input data for inference");
                 TMDataSource inferenceDs = TMDataSourceFactory.instantiate(config.getInferenceDataSourceType(), config.getInferenceDataSourceParams());
                 ArrayList<ArrayList<Instance>> instanceBuffer = inferenceDs.getInferenceInputs(config);
                 // ArrayList<ArrayList<Instance>> instanceBuffer = ReadDataFromDB(SQLConnectionString, experimentType, numModalities, 10, "WHERE batchid>'2018'");
-                InstanceList[] instances = ImportInstancesWithExistingPipes(instanceBuffer, inferencer.getPipes(), numModalities);
-                LOGGER.info("Instances added through pipe");
+                InstanceList[] instances = ImportInstancesWithExistingPipes(instanceBuffer, inferencer.getPipes(), config.getNumModalities());
+                LOGGER.info("Added " + instances.length + " instances through pipe. Beginning inference.");
 
-                inferencer.inferTopicDistributionsOnNewDocs(instances, SQLConnectionString, experimentId, null);
-           
-            }
+                inferencer.inferTopicDistributionsOnNewDocs(instances);
+                inferencer.computeDocumentAssignments(0.03);
 
-            if (calcTopicDistributionsAndTrends) {
-
-                CalcEntityTopicDistributionsAndTrends(SQLConnectionString, experimentId);
-
-            }
-
-            if (calcEntitySimilarities) {
-
-                calcSimilarities(SQLConnectionString, experimentType, experimentId, ACMAuthorSimilarity, similarityType, numTopics);
-
-            }
-
-            if (calcTopicSimilarities) {
-                experimentId = "HEALTHTenderPM_500T_600IT_7000CHRs_10.0 3.0E-4_2.0E-4PRN50B_4M_4TH_cosOneWay";
-                CalcTopicSimilarities(SQLConnectionString, experimentId);
-            }
-
-            if (calcPPRSimilarities) {
-                calcPPRSimilarities(SQLConnectionString);
-            }
-
+                TMDataSource infOutDS = TMDataSourceFactory.instantiate(config.getInferenceOutputDataSourceType(), config.getInferenceOutputDataSourceParams());
+                infOutDS.saveDocumentTopicAssignments(config, inferencer.getDocTopicMap(), config.getInferenceOutputDataSourceParams());
+                LOGGER.info("Inference on " + instances[0].size() + " instances completed.");
         }
 
-    
-
-    public void getPropValues(Map<String, String> runtimeProp) throws IOException {
-
-        InputStream inputStream = null;
-        try {
-            Properties prop = new Properties();
-            String propFileName = "config.properties";
-
-            inputStream = getClass().getClassLoader().getResourceAsStream(propFileName);
-
-            if (inputStream != null) {
-                prop.load(inputStream);
-            } else {
-                throw new FileNotFoundException("property file '" + propFileName + "' not found in the classpath");
-            }
-
-            if (runtimeProp != null) {
-                prop.putAll(runtimeProp);
-            }
-
-            // get the property value and print it out
-            numTopics = Integer.parseInt(prop.getProperty("TopicsNumber"));
-            topWords = Integer.parseInt(prop.getProperty("TopWords"));
-            numModalities = Byte.parseByte(prop.getProperty("NumModalities"));
-            numIterations = Integer.parseInt(prop.getProperty("Iterations"));
-            numOfThreads = Integer.parseInt(prop.getProperty("NumOfThreads"));
-            numChars = Integer.parseInt(prop.getProperty("NumOfChars"));
-            burnIn = Integer.parseInt(prop.getProperty("BurnIn"));
-            optimizeInterval = Integer.parseInt(prop.getProperty("OptimizeInterval"));
-            pruneCntPerc = Double.parseDouble(prop.getProperty("PruneCntPerc"));
-            pruneLblCntPerc = Double.parseDouble(prop.getProperty("PruneLblCntPerc"));
-            pruneMaxPerc = Double.parseDouble(prop.getProperty("PruneMaxPerc"));
-            SQLConnectionString = prop.getProperty("SQLConnectionString");
-            experimentId = prop.getProperty("ExperimentId");
-
-        } catch (Exception e) {
-            LOGGER.error("Exception in reading properties: " + e);
-        } finally {
-            inputStream.close();
-        }
-
-    }
 
 //    private void writeProperties() {
 //        Properties prop = new Properties();
