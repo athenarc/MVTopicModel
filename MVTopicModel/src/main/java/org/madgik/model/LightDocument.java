@@ -21,6 +21,4 @@ public class LightDocument {
     String pubyear;
     String journal;
     String project;
-
-
 }
