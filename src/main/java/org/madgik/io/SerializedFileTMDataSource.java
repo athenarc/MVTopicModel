@@ -1,15 +1,17 @@
-package org.madgik.MVTopicModel.io;
+package org.madgik.io;
 
 import cc.mallet.types.Instance;
 import edu.stanford.nlp.util.Pair;
 import edu.stanford.nlp.util.Quadruple;
-import edu.stanford.nlp.util.Triple;
-import org.apache.commons.lang.ArrayUtils;
 import org.madgik.MVTopicModel.FastQMVWVTopicInferencer;
 import org.madgik.MVTopicModel.FastQMVWVTopicModelDiagnostics;
 import org.madgik.MVTopicModel.SciTopicFlow;
-import org.madgik.MVTopicModel.config.Config;
+import org.madgik.config.Config;
 import org.madgik.MVTopicModel.model.*;
+import org.madgik.dbpediaspotlightclient.DBpediaAnnotator;
+import org.madgik.dbpediaspotlightclient.DBpediaResource;
+import org.madgik.io.modality.Modality;
+import org.madgik.io.modality.Text;
 import org.madgik.utils.Utils;
 
 import java.io.*;
@@ -24,6 +26,7 @@ public class SerializedFileTMDataSource extends FileTMDataSource {
     public static final String name = "serialized";
     public SerializedFileTMDataSource(String properties) {
         super(properties);
+        needsSerializedModel = false;
     }
 
     @Override
@@ -36,7 +39,7 @@ public class SerializedFileTMDataSource extends FileTMDataSource {
      * @param o
      */
     public void writeObject(Object o, String outpath){
-        logger.info("Serializing to " + outpath);
+        LOGGER.info("Serializing to " + outpath);
         // serialize for testing
         ObjectOutputStream out = null;
         try {
@@ -49,7 +52,7 @@ public class SerializedFileTMDataSource extends FileTMDataSource {
     }
 
     public Object readObject(String inpath){
-        logger.info("Reading serialized object from path " + inpath);
+        LOGGER.info("Reading serialized object from path " + inpath);
         // serialize for testing
         ObjectInputStream in = null;
         try {
@@ -64,18 +67,16 @@ public class SerializedFileTMDataSource extends FileTMDataSource {
     }
 
 
-    public ArrayList<ArrayList<Instance>> getModellingInputs(Config config){
-        String inputId = config.getInputId();
-        String inputPath;
-        inputPath = getPath("inputs." +inputId);
-        return (ArrayList<ArrayList<Instance>>) readObject(inputPath);
+    public void getModellingInputs(Config config){
+        readSerializedInputs(config.getInputId());
+    }
+    public void readSerializedInputs(String inputId){
+        String inputPath = getPath(inputId);
+        inputs = (Map<String, List<Modality>>) readObject(inputPath);
     }
 
-    public ArrayList<ArrayList<Instance>> getInferenceInputs(Config config){
-        String infId = config.getInferenceId();
-        String infPath = getPath("inferences." + infId);
-        ArrayList<ArrayList<Instance>> res = (ArrayList<ArrayList<Instance>>) readObject(infPath);
-        return res;
+    public void getInferenceInputs(Config config){
+        readSerializedInputs(config.getInferenceId());
     }
 
     @Override
@@ -97,8 +98,6 @@ public class SerializedFileTMDataSource extends FileTMDataSource {
     public void prepareOutput(String experimentId) {
 
     }
-
-
 
     @Override
     public void saveResults(List<TopicData> topicData, List<DocumentTopicAssignment> docTopics, String batchId, String experimentId,
@@ -142,12 +141,20 @@ public class SerializedFileTMDataSource extends FileTMDataSource {
     }
 
     public FastQMVWVTopicInferencer getInferenceModel(Config config){
-        FastQMVWVTopicInferencer inferencer = null;
-        String path = getPath(config.getInferenceModelDataSourceParams());
+        String path = config.getInferenceModelDataSourceParams();
         try {
-            return FastQMVWVTopicInferencer.read(new File(path));
+            ObjectInputStream ois = new ObjectInputStream(new FileInputStream(new File(path)));
+            String experimentId = (String) ois.readObject();
+            if (! experimentId.equals(config.getExperimentId())){
+                LOGGER.error("Attempted to read inferencer for experiment id " + config.getExperimentId() + " but read model has a different experiment id: " + experimentId);
+            }
+            //return  FastQMVWVTopicInferencer.readFromByteArray(((String) ois.readObject()).getBytes());
+            return  (FastQMVWVTopicInferencer) ois.readObject();
+//            byte[] model = ((String) ois.readObject()).getBytes();
+//            return FastQMVWVTopicInferencer.readFromByteArray(model);
+            //return model;
         } catch (Exception e) {
-            logger.error(e.getMessage());
+            LOGGER.error(e.getMessage());
         }
         return null;
     }
@@ -159,7 +166,25 @@ public class SerializedFileTMDataSource extends FileTMDataSource {
     }
 
     @Override
-    public void saveTopicsAndExperiment(Config config, List<TopicAnalysis> topicAnalysisList, List<TopicDetails> topicDetailsList, byte[] serializedModel, String experimentMetadata) {
+    public void saveTopicsAndExperiment(Config config, List<TopicAnalysis> topicAnalysisList, List<TopicDetails> topicDetailsList, Object serializedModel, String experimentMetadata) {
+        String path = getPath(config.getModellingOutputDataSourceParams() + ".topicsAndExperiment");
+        String experimentId = config.getExperimentId();
+        try{
+
+            LOGGER.info("Serializing experiment and topic information to JSON");
+
+            File f= new File(path);
+            ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(f));
+            oos.writeObject(experimentId);
+            oos.writeObject(serializedModel);
+            oos.writeObject(topicAnalysisList);
+            oos.writeObject(topicDetailsList);
+            oos.writeObject(experimentMetadata);
+            oos.close();
+            LOGGER.info("Saved experiment and topic information to " + path);
+        } catch (IOException e) {
+            LOGGER.error("Problem serializing ParallelTopicModel to file " + path + ": " + e);
+        }
 
     }
 
@@ -168,14 +193,34 @@ public class SerializedFileTMDataSource extends FileTMDataSource {
 
     }
 
-    public void saveInferenceModel(FastQMVWVTopicInferencer model, Config config){
-        FastQMVWVTopicInferencer inferencer = null;
-        String path = getPath(config.getInferenceModelDataSourceParams());
-        try {
-            model.write(new File(path));
-        } catch (Exception e) {
-            logger.error(e.getMessage());
-        }
+    @Override
+    public void saveSemanticAugmentationSingleOutput(List<DBpediaResource> entities, String pubId, DBpediaAnnotator.AnnotatorType annotator) {
+
+    }
+
+    @Override
+    public void saveSemanticOutputResourceDetails(DBpediaResource resource) {
+
+    }
+
+    @Override
+    public void loadSemanticAugmentationInputs(int queueSize) {
+
+    }
+
+    @Override
+    public Text getNextSemanticAugmentationInput(int queueSize) {
+        return null;
+    }
+
+    @Override
+    public void loadSemanticDetailExtractionInputs(int queueSize) {
+
+    }
+
+    @Override
+    public String getNextSemanticDetailExtractionInput(int queueSize) {
+        return null;
     }
 
 }

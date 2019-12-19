@@ -3,7 +3,7 @@ package org.madgik.MVTopicModel.model;
 import java.util.HashMap;
 import java.util.Map;
 
-public class Modality {
+public class MVTopicModelModality {
     public enum types{
         TEXT, DBPEDIA, MESH, KEYWORDS;
     }
@@ -27,7 +27,7 @@ public class Modality {
         this.numTokens = numTokens;
     }
 
-    public Modality() {
+    public MVTopicModelModality() {
         wordWeights = new HashMap<>();
         phraseWeights = new HashMap<>();
     }

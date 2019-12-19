@@ -233,8 +233,8 @@ public class FastQMVWVUpdaterRunnable implements Runnable {
 
                         //Update tree
 //                        if (useCycleProposals) {
-//                            trees[delta.Modality][delta.Type].update(delta.OldTopic, ((currentTypeTopicCounts[delta.OldTopic] + beta[delta.Modality]) / (tokensPerTopic[delta.Modality][delta.OldTopic] + betaSum[delta.Modality])));
-//                            trees[delta.Modality][delta.Type].update(delta.NewTopic, ((currentTypeTopicCounts[delta.NewTopic] + beta[delta.Modality]) / (tokensPerTopic[delta.Modality][delta.NewTopic] + betaSum[delta.Modality])));
+//                            trees[delta.MVTopicModelModality][delta.Type].update(delta.OldTopic, ((currentTypeTopicCounts[delta.OldTopic] + beta[delta.MVTopicModelModality]) / (tokensPerTopic[delta.MVTopicModelModality][delta.OldTopic] + betaSum[delta.MVTopicModelModality])));
+//                            trees[delta.MVTopicModelModality][delta.Type].update(delta.NewTopic, ((currentTypeTopicCounts[delta.NewTopic] + beta[delta.MVTopicModelModality]) / (tokensPerTopic[delta.MVTopicModelModality][delta.NewTopic] + betaSum[delta.MVTopicModelModality])));
 //
 //                            //betaSmoothingTree.update(delta.OldTopic, (beta[0] / (tokensPerTopic[delta.OldTopic] + betaSum[0])));
 //                            //betaSmoothingTree.update(delta.NewTopic, ( beta[0] / (tokensPerTopic[delta.NewTopic] + betaSum[0])));

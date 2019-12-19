@@ -1,14 +1,19 @@
-package org.madgik.MVTopicModel.io;
+package org.madgik.io;
 
 import org.apache.log4j.Logger;
 import org.madgik.MVTopicModel.SciTopicFlow;
-import org.madgik.MVTopicModel.config.Config;
+import org.madgik.config.DataIOConfig;
 
 
 /**
  * Data source factory object.
  */
 public class TMDataSourceFactory {
+
+    public static TMDataSource instantiate(DataIOConfig ioc){
+        return instantiate(ioc.getType(), ioc.getParams());
+    }
+
     public static TMDataSource instantiate(String type, String params){
         Logger logger = Logger.getLogger(SciTopicFlow.LOGGERNAME);
         try {

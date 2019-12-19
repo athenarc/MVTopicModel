@@ -1,4 +1,4 @@
-package org.madgik.MVTopicModel.io;
+package org.madgik.io;
 
 
 import java.io.File;
@@ -13,7 +13,7 @@ public abstract class FileTMDataSource extends TMDataSource {
     protected void deleteFile(String path){
         File file = new File(path);
         if (!file.exists()) return;
-        if(file.delete()) logger.info("Deleted file successfully:" + path);
-        else logger.error("Failed to deleted file:" + path);
+        if(file.delete()) LOGGER.info("Deleted file successfully:" + path);
+        else LOGGER.error("Failed to deleted file:" + path);
     }
 }

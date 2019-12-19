@@ -13,21 +13,21 @@ public class TopicData {
         return topicId;
     }
 
-    public List<Modality> getModalities() {
+    public List<MVTopicModelModality> getModalities() {
         return modalities;
     }
 
-    public Modality getModality(Modality.types type){
-        for(Modality mod : modalities){
-            if (Modality.types.values()[mod.getId()] == type) return mod;
+    public MVTopicModelModality getModality(MVTopicModelModality.types type){
+        for(MVTopicModelModality mod : modalities){
+            if (MVTopicModelModality.types.values()[mod.getId()] == type) return mod;
         }
         return null;
     }
-    public void addModality(Modality mod){
+    public void addModality(MVTopicModelModality mod){
         this.modalities.add(mod);
     }
 
-    List<Modality> modalities;
+    List<MVTopicModelModality> modalities;
 
     public TopicData() {
         modalities = new ArrayList<>();

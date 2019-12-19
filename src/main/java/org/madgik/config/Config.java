@@ -1,10 +1,13 @@
-package org.madgik.MVTopicModel.config;
+package org.madgik.config;
 
 import org.apache.log4j.Logger;
+import org.madgik.MVTopicModel.SciTopicFlow;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -24,10 +27,18 @@ public class Config extends Properties {
     int numTopWords;
 
     public byte getNumModalities() {
-        return numModalities;
+        return (byte) modalities.size();
     }
 
-    byte numModalities;
+    public List<String> getModalities() {
+        return modalities;
+    }
+
+    public void setModalities(List<String> modalities) {
+        this.modalities = modalities;
+    }
+
+    List<String> modalities;
 
     public int getNumIterations() {
         return numIterations;
@@ -47,6 +58,12 @@ public class Config extends Properties {
     double pruneCntPerc;
     double pruneLblCntPerc;
     double pruneMaxPerc;
+
+    public boolean doComputeNewSemanticAugmentations() {
+        return computeNewSemanticAugmentations;
+    }
+
+    boolean computeNewSemanticAugmentations;
 
     public void setExperimentId(String experimentId) {
         this.experimentId = experimentId;
@@ -113,6 +130,12 @@ public class Config extends Properties {
 
     String dictDir = "";
 
+    public int getSeed() {
+        return seed;
+    }
+
+    int seed;
+
 
     boolean ACMAuthorSimilarity;
     boolean calcTopicDistributionsAndTrends;
@@ -137,6 +160,23 @@ public class Config extends Properties {
     String InferenceOutputDataSourceParams;
     String InferenceModelDataSourceType;
     String InferenceModelDataSourceParams;
+
+    public DataIOConfig getSemanticAugmentationInput() {
+        return SemanticAugmentationInput;
+    }
+
+    String SemanticAnnotatorType;
+    public String getSemanticAnnotatorType(){
+        return SemanticAnnotatorType;
+    }
+
+
+    public DataIOConfig getSemanticAugmentationOutput() {
+        return SemanticAugmentationOutput;
+    }
+
+    DataIOConfig SemanticAugmentationInput = new DataIOConfig("semantic_augmentation_input");
+    DataIOConfig SemanticAugmentationOutput = new DataIOConfig("semantic_augmentation_output");
 
     public String getInferenceModelDataSourceType() {
         return InferenceModelDataSourceType;
@@ -178,10 +218,13 @@ public class Config extends Properties {
 
     SimilarityType similarityType = SimilarityType.cos; //Cosine 1 jensenShannonDivergence 2 symmetric KLP
 
+    public Config() {
+    }
 
     public Config(String configPath) {
         this(configPath, null);
     }
+
 
     public Config(String configPath, Map<String, String> runtimeProp) {
         InputStream inputStream = null;
@@ -202,7 +245,7 @@ public class Config extends Properties {
             // get the property value and print it out
             numTopics = Integer.parseInt(prop.getProperty("TopicsNumber", "400"));
             numTopWords = Integer.parseInt(prop.getProperty("TopWords", "20"));
-            numModalities = Byte.parseByte(prop.getProperty("NumModalities", "6"));
+            modalities = Arrays.asList(prop.getProperty("modalities", "text").split(","));
             numIterations = Integer.parseInt(prop.getProperty("Iterations", "800"));
             showTopicsInterval = Integer.parseInt(prop.getProperty("ShowTopicsInterval", "50"));
             numOfThreads = Integer.parseInt(prop.getProperty("NumOfThreads", "4"));
@@ -213,31 +256,38 @@ public class Config extends Properties {
             pruneLblCntPerc = Double.parseDouble(prop.getProperty("PruneLblCntPerc", "0.002"));
             pruneMaxPerc = Double.parseDouble(prop.getProperty("PruneMaxPerc", "10"));
 
-            ModellingInputDataSourceType = prop.getProperty("ModellingInputDataSourceType");
-            ModellingInputDataSourceParams = prop.getProperty("ModellingInputDataSourceParams");
-            ModellingOutputDataSourceType = prop.getProperty("ModellingOutputDataSourceType");
-            ModellingOutputDataSourceParams = prop.getProperty("ModellingOutputDataSourceParams");
 
-            InferenceDataSourceParams = prop.getProperty("InferenceDataSourceParams");
-            InferenceDataSourceType = prop.getProperty("InferenceDataSourceType");
-            InferenceOutputDataSourceParams = prop.getProperty("InferenceOutputDataSourceParams");
-            InferenceOutputDataSourceType = prop.getProperty("InferenceOutputDataSourceType");
-            InferenceModelDataSourceParams = prop.getProperty("InferenceModelDataSourceParams");
-            InferenceModelDataSourceType = prop.getProperty("InferenceModelDataSourceType");
+            try {
+                seed = Integer.parseInt(prop.getProperty("seed"));
+            }catch (NumberFormatException e){
+                seed = 1337;
+                Logger.getLogger(SciTopicFlow.LOGGERNAME).warn("No random seed supplied. Using " + seed);
+            }
+            computeNewSemanticAugmentations = Boolean.parseBoolean(prop.getProperty("computeSemanticAugmentations", "false"));
 
+            ModellingInputDataSourceType = prop.getProperty("ModellingInputDataSourceType").trim();
+            ModellingInputDataSourceParams = prop.getProperty("ModellingInputDataSourceParams").trim();
+            ModellingOutputDataSourceType = prop.getProperty("ModellingOutputDataSourceType").trim();
+            ModellingOutputDataSourceParams = prop.getProperty("ModellingOutputDataSourceParams").trim();
+
+            InferenceDataSourceParams = prop.getProperty("InferenceDataSourceParams").trim();
+            InferenceDataSourceType = prop.getProperty("InferenceDataSourceType").trim();
+            InferenceOutputDataSourceParams = prop.getProperty("InferenceOutputDataSourceParams").trim();
+            InferenceOutputDataSourceType = prop.getProperty("InferenceOutputDataSourceType").trim();
+            InferenceModelDataSourceParams = prop.getProperty("InferenceModelDataSourceParams").trim();
+            InferenceModelDataSourceType = prop.getProperty("InferenceModelDataSourceType").trim();
+
+            // semantic augmentation parameters
+            this.SemanticAugmentationInput.readParams(prop);
+            this.SemanticAugmentationOutput.readParams(prop);
+            SemanticAnnotatorType = prop.getProperty("SemanticAnnotatorType", "spotlight").trim();
 
             initModelFile = prop.getProperty("initModelFile", "");
             tagger = prop.getProperty("tagger", "openNLP");
 
-
             experimentId = prop.getProperty("ExperimentId", "");
             limitDocs = Integer.parseInt(prop.getProperty("limitDocs", "0"));
 
-
-            calcTopicDistributionsAndTrends = Boolean.parseBoolean(prop.getProperty("calcTopicDistributionsAndTrends", "true"));
-            calcEntitySimilarities = Boolean.parseBoolean(prop.getProperty("calcEntitySimilarities ", "true"));
-            calcTopicSimilarities  = Boolean.parseBoolean(prop.getProperty("calcTopicSimilarities", "false"));
-            calcPPRSimilarities = Boolean.parseBoolean(prop.getProperty("calcPPRSimilarities", "false"));
             findKeyPhrases = Boolean.parseBoolean(prop.getProperty("findKeyPhrases", "false"));
             ACMAuthorSimilarity = Boolean.parseBoolean(prop.getProperty("ACMAuthorSimilarity", "true"));
             ignoreText = Boolean.parseBoolean(prop.getProperty("ignoreText", "false"));
@@ -307,7 +357,7 @@ public class Config extends Properties {
 
         if (! this.experimentId.isEmpty()) return experimentId;
         return experimentType.toString() + "_" + numTopics + "T_"
-                + numIterations + "IT_" + numChars + "CHRs_" + numModalities + "M_" + ((limitDocs > 0) ? ("Lmt_" + limitDocs) : "") + PPRenabled.name();
+                + numIterations + "IT_" + numChars + "CHRs_" + modalities.size() + "M_" + ((limitDocs > 0) ? ("Lmt_" + limitDocs) : "") + PPRenabled.name();
     }
     public void makeExperimentDetails(){
         experimentDetails = String.format("Multi View Topic Modeling Analysis \n pruneMaxPerc:%.1f  pruneCntPerc:%.4f" +
@@ -316,11 +366,11 @@ public class Config extends Properties {
     }
     // returns an indentifier pertaining to the input
     public String getInputId(){
-        return experimentType.toString() + "_" + numChars + "CHRs_" + numModalities + "M_" + ((limitDocs > 0) ? ("lim" + limitDocs) : "");
+        return experimentType.toString() + "_" + numChars + "CHRs_" + modalities.size() + "M_" + ((limitDocs > 0) ? ("lim" + limitDocs) : "") + ".inputs";
     }
 
     public String getInferenceId(){
-        return experimentType.toString() + "_" + numChars + "CHRs_" + numModalities + "M_" + ((limitDocs > 0) ? ("lim" + limitDocs) : "");
+        return experimentType.toString() + "_" + numChars + "CHRs_" + modalities.size() + "M_" + ((limitDocs > 0) ? ("lim" + limitDocs) : "") + ".inferences";
     }
 
     public static void main(String[] args) {

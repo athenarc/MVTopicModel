@@ -12,34 +12,6 @@ import java.util.Set;
  *
  * @author omiros
  */
-class DBpediaLink {
-
-    public String label;
-    public String uri;
-
-    public DBpediaLink(String uri, String label) {
-        this.label = label;
-        this.uri = uri;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == this) {
-            return true;
-        }
-        if (obj == null || obj.getClass() != this.getClass()) {
-            return false;
-        }
-        DBpediaLink guest = (DBpediaLink) obj;
-        return uri.equals(guest.uri);
-    }
-
-    @Override
-    public int hashCode() {
-        return uri.hashCode();
-    }
-
-}
 
 public class DBpediaResource {
 
@@ -123,6 +95,12 @@ public class DBpediaResource {
 
     public DBpediaLink getLink() {
         return link;
+    }
+    public String getLinkURI(){
+        return link.uri;
+    }
+    public String getLinkLabel(){
+        return link.label;
     }
 
     public void setURI(DBpediaLink Link) {

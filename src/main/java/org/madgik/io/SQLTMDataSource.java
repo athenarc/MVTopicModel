@@ -1,19 +1,22 @@
-package org.madgik.MVTopicModel.io;
+package org.madgik.io;
 
 import cc.mallet.types.Instance;
 import org.madgik.MVTopicModel.FastQMVWVTopicInferencer;
 import org.madgik.MVTopicModel.FastQMVWVTopicModelDiagnostics;
 import org.madgik.MVTopicModel.SciTopicFlow;
 import org.madgik.MVTopicModel.model.*;
-import org.madgik.utils.Utils;
-import org.madgik.MVTopicModel.config.*;
-import org.madgik.MVTopicModel.config.Config.ExperimentType;
+import org.madgik.config.*;
+import org.madgik.config.Config.ExperimentType;
 
 import java.io.*;
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.util.*;
 import org.apache.log4j.Logger;
+import org.madgik.dbpediaspotlightclient.DBpediaAnnotator;
+import org.madgik.dbpediaspotlightclient.DBpediaLink;
+import org.madgik.dbpediaspotlightclient.DBpediaResource;
+import org.madgik.io.modality.*;
 
 /**
  * Class for SQL-based data sources
@@ -24,6 +27,8 @@ public class SQLTMDataSource extends TMDataSource {
     String jdbcString;
     public static final String name = "sql";
     Logger LOGGER = Logger.getLogger(SciTopicFlow.LOGGERNAME);
+    ResultSet semanticAnnotationInputs;
+    ResultSet semanticDetailExtractionInputs;
 
     public SQLTMDataSource(String properties) {
         super(properties);
@@ -33,24 +38,26 @@ public class SQLTMDataSource extends TMDataSource {
     void initialize(String properties) {
         // properties is a jdbc string
         connection = null;
-        String [] parts = properties.split(",");
-        this.jdbcString =  parts[0];
+        String[] parts = properties.split(",");
+        this.jdbcString = parts[0];
     }
 
     private void closeConnection() {
-        if(this.connection != null) {
+        if (this.connection != null) {
             try {
                 this.connection.close();
             } catch (SQLException e) {
-                logger.error(e.getMessage());
+                LOGGER.error(e.getMessage());
             }
         }
     }
+
     /**
      * Persistent database connection fetcher
+     *
      * @return
      */
-    private Connection getConnection(){
+    private Connection getConnection() {
         try {
             if (this.connection != null && (!this.connection.isClosed()))
                 return this.connection;
@@ -60,24 +67,24 @@ public class SQLTMDataSource extends TMDataSource {
         try {
             this.connection = DriverManager.getConnection(this.jdbcString);
         } catch (SQLException e) {
-            logger.error(e.getMessage());
+            LOGGER.error(e.getMessage());
             return null;
         }
         return this.connection;
     }
 
-    private ResultSet query(String sqlQuery){
+    private ResultSet query(String sqlQuery) {
         Statement statement = null;
         try {
             statement = getConnection().createStatement();
             return statement.executeQuery(sqlQuery);
         } catch (SQLException e) {
-            logger.error(e.getMessage());
+            LOGGER.error(e.getMessage());
             return null;
         }
     }
 
-    public Map<Integer, String> getTopics(String experimentId){
+    public Map<Integer, String> getTopics(String experimentId) {
 
         double topicWeight = 0.55;
         String sql = "select doc_topic.TopicId, document.title, document.abstract from \n"
@@ -95,18 +102,19 @@ public class SQLTMDataSource extends TMDataSource {
                 res.put(rs.getInt("TopicId"), rs.getString("title"));
             }
         } catch (SQLException e) {
-            logger.error(e.getMessage());
+            LOGGER.error(e.getMessage());
         }
         return res;
     }
 
     /**
      * Method to insert extracted keyphrases per topic to the sql backend
+     *
      * @param topicTitles
      * @param experimentId
      * @param keyphraseTagger
      */
-    public void prepareTopicKeyphraseWrite(Map<Integer, Map<String, List<Integer>>> topicTitles, String experimentId, String keyphraseTagger){
+    public void prepareTopicKeyphraseWrite(Map<Integer, Map<String, List<Integer>>> topicTitles, String experimentId, String keyphraseTagger) {
 
         try {
             Statement statement = this.connection.createStatement();
@@ -120,7 +128,7 @@ public class SQLTMDataSource extends TMDataSource {
             PreparedStatement bulkInsert = null;
             String insertSQL = "insert into TopicKeyPhrase values(?,?,?,?,?,?,?);";
 
-            logger.info("Saving key phrases.");
+            LOGGER.info("Saving key phrases.");
             try {
 
                 connection.setAutoCommit(false);
@@ -147,13 +155,13 @@ public class SQLTMDataSource extends TMDataSource {
 
             } catch (SQLException e) {
 
-                logger.error("Error in insert topicPhrases: " + e);
+                LOGGER.error("Error in insert topicPhrases: " + e);
                 if (connection != null) {
                     try {
-                        logger.error("Transaction is being rolled back");
+                        LOGGER.error("Transaction is being rolled back");
                         connection.rollback();
                     } catch (SQLException excep) {
-                        logger.error("Error in insert topicPhrases: " + excep);
+                        LOGGER.error("Error in insert topicPhrases: " + excep);
                     }
                 }
             } finally {
@@ -167,7 +175,7 @@ public class SQLTMDataSource extends TMDataSource {
         } catch (SQLException e) {
             // if the error message is "out of memory",
             // it probably means no database file is found
-            logger.error(e.getMessage());
+            LOGGER.error(e.getMessage());
         } finally {
             try {
                 if (connection != null) {
@@ -175,10 +183,10 @@ public class SQLTMDataSource extends TMDataSource {
                 }
             } catch (SQLException e) {
                 // connection close failed.
-                logger.error(e);
+                LOGGER.error(e);
             }
         }
-        logger.info("Finding Key phrases finished");
+        LOGGER.info("Finding Key phrases finished");
     }
 
     @Override
@@ -187,8 +195,8 @@ public class SQLTMDataSource extends TMDataSource {
         try {
             statement = this.getConnection().createStatement();
             // create a database connection
-            String [] delSources = {"doc_topic", "TopicDetails", "Topic", "TopicAnalysis", "ExpDiagnostics"};
-            for (String delTable: delSources)
+            String[] delSources = {"doc_topic", "TopicDetails", "Topic", "TopicAnalysis", "ExpDiagnostics"};
+            for (String delTable : delSources)
                 statement.executeUpdate(String.format("Delete from %s where ExperimentId ='%s'", delTable, experimentId));
         } catch (SQLException e) {
             // if the error message is "out of memory",
@@ -201,7 +209,7 @@ public class SQLTMDataSource extends TMDataSource {
 
     @Override
     public void saveResults(List<TopicData> topicData, List<DocumentTopicAssignment> docTopics, String batchId, String experimentId,
-                            String experimentDescription, String experimentMetadata){
+                            String experimentDescription, String experimentMetadata) {
 
 
         PreparedStatement bulkInsert = null;
@@ -212,8 +220,8 @@ public class SQLTMDataSource extends TMDataSource {
             getConnection().setAutoCommit(false);
             bulkInsert = getConnection().prepareStatement(sql);
 
-            for(TopicData topic : topicData){
-                for (Modality mod : topic.getModalities()) {
+            for (TopicData topic : topicData) {
+                for (MVTopicModelModality mod : topic.getModalities()) {
                     for (String word : mod.getWordWeights().keySet()) {
 
                         bulkInsert.setInt(1, topic.getTopicId());
@@ -229,10 +237,10 @@ public class SQLTMDataSource extends TMDataSource {
 
 
             // Save Topic Analysis
-            for(TopicData topic : topicData) {
-                Modality textModality = topic.getModality(Modality.types.TEXT);
+            for (TopicData topic : topicData) {
+                MVTopicModelModality textModality = topic.getModality(MVTopicModelModality.types.TEXT);
                 if (textModality == null) {
-                    logger.error("No text modality found to save prhase data!");
+                    LOGGER.error("No text modality found to save prhase data!");
                     return;
                 }
                 for (String phrase : textModality.getPhraseWeights().keySet()) {
@@ -249,14 +257,14 @@ public class SQLTMDataSource extends TMDataSource {
             }
 
         } catch (SQLException e) {
-            logger.error("Exception in save Topics: " + e.getMessage());
+            LOGGER.error("Exception in save Topics: " + e.getMessage());
             //System.err.print(e.getMessage());
             if (connection != null) {
                 try {
-                    logger.error("Transaction is being rolled back");
+                    LOGGER.error("Transaction is being rolled back");
                     connection.rollback();
                 } catch (SQLException excep) {
-                    logger.error("Error in insert topicAnalysis");
+                    LOGGER.error("Error in insert topicAnalysis");
                 }
             }
         } finally {
@@ -266,13 +274,13 @@ public class SQLTMDataSource extends TMDataSource {
                     bulkInsert.close();
                     connection.setAutoCommit(true);
                 } catch (SQLException ex) {
-                    logger.error(ex.getMessage());
+                    LOGGER.error(ex.getMessage());
                 }
             }
         }
 
 
-        try{
+        try {
             String boostSelect = String.format("select  \n"
                     + " a.experimentid, PhraseCnts, textcnts, textcnts/phrasecnts as boost\n"
                     + "from \n"
@@ -302,13 +310,13 @@ public class SQLTMDataSource extends TMDataSource {
             connection.commit();
 
         } catch (SQLException e) {
-            logger.error("Exception in save Topics: " + e.getMessage());
+            LOGGER.error("Exception in save Topics: " + e.getMessage());
             if (connection != null) {
                 try {
-                    logger.error("Transaction is being rolled back");
+                    LOGGER.error("Transaction is being rolled back");
                     connection.rollback();
                 } catch (SQLException excep) {
-                    logger.error("Error in insert experiment details");
+                    LOGGER.error("Error in insert experiment details");
                 }
             }
         } finally {
@@ -316,26 +324,25 @@ public class SQLTMDataSource extends TMDataSource {
             try {
                 connection.setAutoCommit(true);
                 if (bulkInsert != null) bulkInsert.close();
+            } catch (SQLException ex) {
+                LOGGER.error(ex.getMessage());
             }
-            catch (SQLException ex) {
-                    logger.error(ex.getMessage());
-           }
         }
 
-            try {
+        try {
 
-                String insertTopicDescriptionSql = "INSERT into Topic (Title, Category, id , VisibilityIndex, ExperimentId )\n"
-                        + "select substr(string_agg(Item,','),1,100), '' , topicId , 1, '" + experimentId + "' \n"
-                        + "from  Topic_View\n"
-                        + " where experimentID = '" + experimentId + "' \n"
-                        + " GROUP BY TopicID";
-                Statement statement = getConnection().createStatement();
-                statement.executeUpdate(insertTopicDescriptionSql);
-            } catch (SQLException e) {
-                // if the error message is "out of memory",
-                // it probably means no database file is found
-                logger.error("Exception in save Topics: " + e.getMessage());
-            } finally {
+            String insertTopicDescriptionSql = "INSERT into Topic (Title, Category, id , VisibilityIndex, ExperimentId )\n"
+                    + "select substr(string_agg(Item,','),1,100), '' , topicId , 1, '" + experimentId + "' \n"
+                    + "from  Topic_View\n"
+                    + " where experimentID = '" + experimentId + "' \n"
+                    + " GROUP BY TopicID";
+            Statement statement = getConnection().createStatement();
+            statement.executeUpdate(insertTopicDescriptionSql);
+        } catch (SQLException e) {
+            // if the error message is "out of memory",
+            // it probably means no database file is found
+            LOGGER.error("Exception in save Topics: " + e.getMessage());
+        } finally {
                 /*try {
                     if (connection != null) {
                         connection.close();
@@ -345,52 +352,52 @@ public class SQLTMDataSource extends TMDataSource {
                     LOGGER.error(e);
                 }
                  */
+        }
+
+        String topicDetailInsertsql = "insert into TopicDetails values(?,?,?,?,?,? );";
+        PreparedStatement bulkTopicDetailInsert = null;
+        bulkTopicDetailInsert = null;
+        try {
+            bulkTopicDetailInsert = connection.prepareStatement(topicDetailInsertsql);
+            connection.setAutoCommit(false);
+
+
+            for (TopicData topic : topicData) {
+                for (MVTopicModelModality mod : topic.getModalities()) {
+                    bulkTopicDetailInsert.setInt(1, topic.getTopicId());
+                    bulkTopicDetailInsert.setInt(2, mod.getId());
+                    bulkTopicDetailInsert.setDouble(3, mod.getWeight());
+                    bulkTopicDetailInsert.setInt(4, mod.getNumTokens());
+                    bulkTopicDetailInsert.setString(5, batchId);
+                    bulkTopicDetailInsert.setString(6, experimentId);
+
+                    bulkTopicDetailInsert.executeUpdate();
+                }
             }
+            connection.commit();
+        } catch (SQLException e) {
+            LOGGER.error("Exception in save Topics: " + e.getMessage());
 
-            String topicDetailInsertsql = "insert into TopicDetails values(?,?,?,?,?,? );";
-            PreparedStatement bulkTopicDetailInsert = null;
-            bulkTopicDetailInsert = null;
-            try {
-                bulkTopicDetailInsert = connection.prepareStatement(topicDetailInsertsql);
-                connection.setAutoCommit(false);
-
-
-                for(TopicData topic : topicData) {
-                    for (Modality mod : topic.getModalities()) {
-                        bulkTopicDetailInsert.setInt(1, topic.getTopicId());
-                        bulkTopicDetailInsert.setInt(2, mod.getId());
-                        bulkTopicDetailInsert.setDouble(3, mod.getWeight());
-                        bulkTopicDetailInsert.setInt(4, mod.getNumTokens());
-                        bulkTopicDetailInsert.setString(5, batchId);
-                        bulkTopicDetailInsert.setString(6, experimentId);
-
-                        bulkTopicDetailInsert.executeUpdate();
-                    }
-                }
-                connection.commit();
-            } catch (SQLException e) {
-                logger.error("Exception in save Topics: " + e.getMessage());
-
-                if (connection != null) {
-                    try {
-                        logger.error("Transaction is being rolled back");
-                        connection.rollback();
-                    } catch (SQLException excep) {
-                        logger.error("Error in insert topic details");
-                    }
-                }
-            } finally {
-
+            if (connection != null) {
                 try {
-                    if (bulkTopicDetailInsert != null) {
-                        bulkTopicDetailInsert.close();
-                    }
-                    connection.setAutoCommit(true);
-                } catch (SQLException ex) {
-                    logger.error(ex.getMessage());
+                    LOGGER.error("Transaction is being rolled back");
+                    connection.rollback();
+                } catch (SQLException excep) {
+                    LOGGER.error("Error in insert topic details");
                 }
             }
-            logger.info("Done saving results.");
+        } finally {
+
+            try {
+                if (bulkTopicDetailInsert != null) {
+                    bulkTopicDetailInsert.close();
+                }
+                connection.setAutoCommit(true);
+            } catch (SQLException ex) {
+                LOGGER.error(ex.getMessage());
+            }
+        }
+        LOGGER.info("Done saving results.");
 
 
         // save document assignments
@@ -398,7 +405,7 @@ public class SQLTMDataSource extends TMDataSource {
         try {
             bulkInsert = connection.prepareStatement(docSql);
             connection.setAutoCommit(false);
-            for(DocumentTopicAssignment dta : docTopics) {
+            for (DocumentTopicAssignment dta : docTopics) {
                 for (int topic : dta.getTopicWeights().keySet()) {
 
                     bulkInsert.setString(1, dta.getId());
@@ -410,14 +417,13 @@ public class SQLTMDataSource extends TMDataSource {
                 }
             }
         } catch (SQLException ex) {
-            logger.error(ex.getMessage());
-        }
-        finally {
+            LOGGER.error(ex.getMessage());
+        } finally {
             try {
                 connection.setAutoCommit(true);
                 bulkInsert.close();
             } catch (SQLException ex) {
-                logger.error(ex.getMessage());
+                LOGGER.error(ex.getMessage());
             }
         }
     }
@@ -438,7 +444,7 @@ public class SQLTMDataSource extends TMDataSource {
             bulkInsert = connection.prepareStatement(sql);
 
             for (byte m = 0; m < numModalities; m++) {
-                current_score =  String.format("perplexity %d" , m);
+                current_score = String.format("perplexity %d", m);
 
                 bulkInsert.setString(1, experimentId);
                 bulkInsert.setString(2, batchId);
@@ -451,7 +457,7 @@ public class SQLTMDataSource extends TMDataSource {
                 int p = 1;
                 while (p < perplexities[m].length && perplexities[m][p] != 0) //for (int p = 0; p < model.perplexities[m].length; p++)
                 {
-                    current_score =  String.format("LogLikehood %d %d", m,p);
+                    current_score = String.format("LogLikehood %d %d", m, p);
                     bulkInsert.setString(1, experimentId);
                     bulkInsert.setString(2, batchId);
                     bulkInsert.setString(3, String.format("%d", 10 * p));
@@ -466,7 +472,7 @@ public class SQLTMDataSource extends TMDataSource {
             for (int topic = 0; topic < numTopics; topic++) {
 
                 for (FastQMVWVTopicModelDiagnostics.TopicScores scores : diagnostics) {
-                    current_score = scores.name+String.format(" Topic %d", topic);
+                    current_score = scores.name + String.format(" Topic %d", topic);
 
                     bulkInsert.setString(1, experimentId);
                     bulkInsert.setString(2, batchId);
@@ -506,14 +512,14 @@ public class SQLTMDataSource extends TMDataSource {
 
         } catch (SQLException e) {
 
-            logger.error("Exception in save diagnostics score ["+ current_score +"] : "+ e.getMessage());
+            LOGGER.error("Exception in save diagnostics score [" + current_score + "] : " + e.getMessage());
 
             if (connection != null) {
                 try {
-                    logger.error("Transaction is being rolled back \n");
+                    LOGGER.error("Transaction is being rolled back \n");
                     connection.rollback();
                 } catch (SQLException excep) {
-                    logger.error("Error in insert expDiagnostics \n");
+                    LOGGER.error("Error in insert expDiagnostics \n");
                 }
             }
         } finally {
@@ -526,11 +532,11 @@ public class SQLTMDataSource extends TMDataSource {
         try {
             Statement statement = getConnection().createStatement();
 
-            logger.info("Calc topic Entity Topic Distributions and Trends started");
+            LOGGER.info("Calc topic Entity Topic Distributions and Trends started");
             String deleteSQL = String.format("Delete from EntityTopicDistribution where ExperimentId= '%s'", experimentId);
             statement.executeUpdate(deleteSQL);
         } catch (SQLException e) {
-            logger.error(e.getMessage());
+            LOGGER.error(e.getMessage());
         }
 
     }
@@ -561,7 +567,7 @@ public class SQLTMDataSource extends TMDataSource {
 
             getConnection().setAutoCommit(true);
         } catch (SQLException e) {
-            logger.error(e.getMessage());
+            LOGGER.error(e.getMessage());
         }
     }
 
@@ -572,30 +578,30 @@ public class SQLTMDataSource extends TMDataSource {
         Statement statement;
         try {
             // create a database connection
-                statement = getConnection().createStatement();
-                String modelSelect = String.format("select model from inferencemodel "
-                        + "where experimentid = '%s' \n",
-                        experimentId);
+            statement = getConnection().createStatement();
+            String modelSelect = String.format("select model from inferencemodel "
+                            + "where experimentid = '%s' \n",
+                    experimentId);
 
-                boolean loaded = false;
-                ResultSet rs = statement.executeQuery(modelSelect);
-                while (rs.next()) {
-                    if (loaded){
-                       logger.error("Found more than one model for experiment " + experimentId);
-                       return null;
-                    }
-                    try {
-                        byte b[] = (byte[]) rs.getObject("model");
-                        ByteArrayInputStream bi = new ByteArrayInputStream(b);
-                        ObjectInputStream si = new ObjectInputStream(bi);
-                        topicModel = (FastQMVWVTopicInferencer) si.readObject();
-                    } catch (Exception e) {
-                        logger.error(e.getMessage());
-                    }
-                    loaded = true;
+            boolean loaded = false;
+            ResultSet rs = statement.executeQuery(modelSelect);
+            while (rs.next()) {
+                if (loaded) {
+                    LOGGER.error("Found more than one model for experiment " + experimentId);
+                    return null;
                 }
+                try {
+                    byte b[] = (byte[]) rs.getObject("model");
+                    ByteArrayInputStream bi = new ByteArrayInputStream(b);
+                    ObjectInputStream si = new ObjectInputStream(bi);
+                    topicModel = (FastQMVWVTopicInferencer) si.readObject();
+                } catch (Exception e) {
+                    LOGGER.error(e.getMessage());
+                }
+                loaded = true;
+            }
         } catch (SQLException e) {
-            logger.error(e.getMessage());
+            LOGGER.error(e.getMessage());
         } finally {
             try {
                 if (connection != null) {
@@ -603,7 +609,7 @@ public class SQLTMDataSource extends TMDataSource {
                 }
             } catch (SQLException e) {
                 // connection close failed.
-                logger.error(e.getMessage());
+                LOGGER.error(e.getMessage());
             }
         }
         return topicModel;
@@ -612,7 +618,7 @@ public class SQLTMDataSource extends TMDataSource {
     @Override
     public void deleteExistingExperiment(Config config) {
         String experimentId = config.getExperimentId();
-        logger.info("Deleting previous experiment" + experimentId);
+        LOGGER.info("Deleting previous experiment" + experimentId);
         try {
             // create a database connection
             Statement statement = getConnection().createStatement();
@@ -651,7 +657,7 @@ public class SQLTMDataSource extends TMDataSource {
 
 
     @Override
-    public void saveTopicsAndExperiment(Config config, List<TopicAnalysis> topicAnalysisList, List<TopicDetails> topicDetailsList, byte[] serializedModel, String experimentMetadata) {
+    public void saveTopicsAndExperiment(Config config, List<TopicAnalysis> topicAnalysisList, List<TopicDetails> topicDetailsList, Object serializedModel, String experimentMetadata) {
 
         Statement statement = null;
         try {
@@ -662,7 +668,7 @@ public class SQLTMDataSource extends TMDataSource {
                 getConnection().setAutoCommit(false);
                 // store topic analysis
                 bulkInsert = getConnection().prepareStatement(sql);
-                for (TopicAnalysis ta : topicAnalysisList){
+                for (TopicAnalysis ta : topicAnalysisList) {
                     bulkInsert.setInt(1, ta.getTopicId());
                     bulkInsert.setInt(2, ta.getModality());
                     bulkInsert.setString(3, ta.getItem());
@@ -674,25 +680,25 @@ public class SQLTMDataSource extends TMDataSource {
 
                 }
                 connection.commit();
-                } catch (SQLException e) {
+            } catch (SQLException e) {
 
-                    logger.error("Exception in save Topics: " + e.getMessage());
-                    //System.err.print(e.getMessage());
-                    if (connection != null) {
-                        try {
-                            logger.error("Transaction is being rolled back");
-                            connection.rollback();
-                        } catch (SQLException excep) {
-                            logger.error("Error in insert topicAnalysis");
-                        }
+                LOGGER.error("Exception in save Topics: " + e.getMessage());
+                //System.err.print(e.getMessage());
+                if (connection != null) {
+                    try {
+                        LOGGER.error("Transaction is being rolled back");
+                        connection.rollback();
+                    } catch (SQLException excep) {
+                        LOGGER.error("Error in insert topicAnalysis");
                     }
-                } finally {
-
-                    if (bulkInsert != null) {
-                        bulkInsert.close();
-                    }
-                    connection.setAutoCommit(true);
                 }
+            } finally {
+
+                if (bulkInsert != null) {
+                    bulkInsert.close();
+                }
+                connection.setAutoCommit(true);
+            }
 
 
             // boost
@@ -735,7 +741,7 @@ public class SQLTMDataSource extends TMDataSource {
                 sql = "insert into inferencemodel (ExperimentId, model) values(?,?);";
                 bulkInsert = connection.prepareStatement(sql);
                 bulkInsert.setString(1, config.getExperimentId());
-                ByteArrayInputStream bais = new ByteArrayInputStream(serializedModel);
+                ByteArrayInputStream bais = new ByteArrayInputStream((byte[]) serializedModel);
                 bulkInsert.setBinaryStream(2, bais);
                 bulkInsert.executeUpdate();
 
@@ -743,14 +749,14 @@ public class SQLTMDataSource extends TMDataSource {
 
             } catch (SQLException e) {
 
-                logger.error("Exception in save Topics: " + e.getMessage());
+                LOGGER.error("Exception in save Topics: " + e.getMessage());
                 if (connection != null) {
                     try {
 
-                        logger.error("Transaction is being rolled back");
+                        LOGGER.error("Transaction is being rolled back");
                         connection.rollback();
                     } catch (SQLException excep) {
-                        logger.error("Error in insert experiment details");
+                        LOGGER.error("Error in insert experiment details");
                     }
                 }
             } finally {
@@ -776,7 +782,7 @@ public class SQLTMDataSource extends TMDataSource {
             } catch (SQLException e) {
                 // if the error message is "out of memory",
                 // it probably means no database file is found
-                logger.error("Exception in save Topics: " + e.getMessage());
+                LOGGER.error("Exception in save Topics: " + e.getMessage());
             } finally {
                 /*try {
                     if (connection != null) {
@@ -795,26 +801,26 @@ public class SQLTMDataSource extends TMDataSource {
             try {
                 bulkTopicDetailInsert = connection.prepareStatement(topicDetailInsertsql);
                 connection.setAutoCommit(false);
-                for (TopicDetails td: topicDetailsList){
-                        bulkTopicDetailInsert.setInt(1, td.getTopicId());
-                        bulkTopicDetailInsert.setInt(2, td.getModality());
-                        bulkTopicDetailInsert.setDouble(3, td.getWeight());
-                        bulkTopicDetailInsert.setInt(4, td.getTotalTokens());
-                        bulkTopicDetailInsert.setString(5, "");
-                        bulkTopicDetailInsert.setString(6, config.getExperimentId());
-                        bulkTopicDetailInsert.executeUpdate();
+                for (TopicDetails td : topicDetailsList) {
+                    bulkTopicDetailInsert.setInt(1, td.getTopicId());
+                    bulkTopicDetailInsert.setInt(2, td.getModality());
+                    bulkTopicDetailInsert.setDouble(3, td.getWeight());
+                    bulkTopicDetailInsert.setInt(4, td.getTotalTokens());
+                    bulkTopicDetailInsert.setString(5, "");
+                    bulkTopicDetailInsert.setString(6, config.getExperimentId());
+                    bulkTopicDetailInsert.executeUpdate();
                 }
                 connection.commit();
 
             } catch (SQLException e) {
-                logger.error("Exception in save Topic details: " + e.getMessage());
+                LOGGER.error("Exception in save Topic details: " + e.getMessage());
 
                 if (connection != null) {
                     try {
-                        logger.error("Transaction is being rolled back");
+                        LOGGER.error("Transaction is being rolled back");
                         connection.rollback();
                     } catch (SQLException excep) {
-                        logger.error("Error in insert topic details");
+                        LOGGER.error("Error in insert topic details");
                     }
                 }
             } finally {
@@ -841,29 +847,18 @@ public class SQLTMDataSource extends TMDataSource {
         }
     }
 
-    public ArrayList<ArrayList<Instance>> getInferenceInputs(Config config) {
-        return null;
+    public void getInferenceInputs(Config config) {
     }
 
-    public ArrayList<ArrayList<Instance>> getModellingInputs(Config config) {
+
+    public void getModellingInputs(Config config) {
 //        instanceBuffer = ReadDataFromDB(SQLConnectionString, experimentType, numModalities, limitDocs, filter);
-        int numModalities = config.getNumModalities();
-        ArrayList<ArrayList<Instance>> instanceBuffer = new ArrayList<>(numModalities);
-        String SQLConnection = jdbcString;
         int limitDocs = config.getLimitDocs();
-        ExperimentType experimentType = config.getExperimentType();
         String filter = " where batchid > '2018'";
-        int numChars = config.getNumChars();
 
-        for (byte m = 0; m < numModalities; m++) instanceBuffer.add(new ArrayList<>());
-
-        Connection connection = null;
         try {
+            getConnection().setAutoCommit(false);
 
-            connection = DriverManager.getConnection(SQLConnection);
-            connection.setAutoCommit(false);
-
-            String sql = "";
             // String txtsql = "select doctxt_view.docId, text, fulltext from doctxt_view " + filter + " Order by doctxt_view.docId " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
             String txtsql = "select distinct ON (document.id)  document.id as docid, " +
                     "substr((((COALESCE(pmc_titles_temp.title, ''::text) || ' '::text) || substr(COALESCE(document.abstract_pmc, ''::text), 0, 7000)) || ' '::text), 0, 10000) AS text,"
@@ -876,25 +871,30 @@ public class SQLTMDataSource extends TMDataSource {
                     + "Order by document.id \n"
                     + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");//+ " LIMIT 10000";
 
-            if (experimentType == ExperimentType.ACM) {
+            LOGGER.info("Text SQL:\n" + txtsql);
 
-                sql = " select  docid,  citations, categories, keywords, venue, DBPediaResources from docsideinfo_view " + filter + " Order by docsideinfo_view.docId " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+            LOGGER.info(" Getting text from the database");
+            // get txt data
+            Statement txtstatement = connection.createStatement();
+            txtstatement.setFetchSize(10000);
+            ResultSet rstxt = txtstatement.executeQuery(txtsql);
 
-                /*
-                if (PPRenabled == Net2BoWType.PPR) {
-                    sql = " select  docid,   citations, categories, period, keywords, venue, DBPediaResources from docsideinfo_view  Order by docsideinfo_view.docId  " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-                } else if (PPRenabled == Net2BoWType.OneWay) {
+            for(String mod: config.getModalities()) inputs.put(mod, new ArrayList<>());
 
-                    sql = " select  docid,  citations, categories, keywords, venue, DBPediaResources from docsideinfo_view  Order by docsideinfo_view.docId " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-                } else if (PPRenabled == Net2BoWType.TwoWay) {
-                    sql = " select  docid, authors, citations, categories, keywords, venue, DBPediaResources from docsideinfo_view  Order by docsideinfo_view.docId  " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
+            while (rstxt.next()) {
+                String id = rstxt.getString("docid");
+                String txt = rstxt.getString("text");
+                inputs.get(Modality.text()).add(new Text(id, txt));
+            }
 
-                }
-                 */
-            } else if (experimentType == ExperimentType.PubMed) {
+            if (config.getModalities().size() > 1) {
+                LOGGER.info(" Getting side info from the database");
+                Statement statement = connection.createStatement();
+                statement.setFetchSize(10000);
+
+
                 // sql = " select  docid, keywords, meshterms, dbpediaresources  from docsideinfo_view  " + filter + " Order by docsideinfo_view.docId " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-
-                sql = "select distinct ON (docsideinfo_norescount_view.docid)  docsideinfo_norescount_view.docid, keywords, meshterms, dbpediaresources  \n"
+                String sql = "select distinct ON (docsideinfo_norescount_view.docid)  docsideinfo_norescount_view.docid, keywords, meshterms, dbpediaresources  \n"
                         + "from docsideinfo_norescount_view  \n"
                         + "LEFT JOIN doc_project on doc_project.docid = docsideinfo_norescount_view.docId\n"
                         + "LEFT JOIN document on document.id = docsideinfo_norescount_view.docId\n"
@@ -905,188 +905,23 @@ public class SQLTMDataSource extends TMDataSource {
                         + "Order by docsideinfo_norescount_view.docId \n"
                         + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
 
-
-                LOGGER.info("Text SQL:\n" + txtsql);
-                /* if (D4I) {
-                    sql = "select distinct ON (docsideinfo_view.docid)  docsideinfo_view.docid, keywords, meshterms, dbpediaresources  \n"
-                            + "from docsideinfo_view  \n"
-                            + "LEFT JOIN doc_project on doc_project.docid = docsideinfo_view.docId\n"
-                            + "where batchid > '2004' and (doctype='publication' OR doctype='project_report') \n"
-                            + "and (repository = 'PubMed Central' OR  doc_project.projectid IN \n"
-                            + "(select projectid from doc_project\n"
-                            + "join document on doc_project.docid = document.id and repository = 'PubMed Central'\n"
-                            + "group by projectid\n"
-                            + "having count(*) > 5) )\n"
-                            + "Order by docsideinfo_view.docId \n"
-                            + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-                }*/
-
-            }
-
-            LOGGER.info(" Getting text from the database");
-            // get txt data
-            Statement txtstatement = connection.createStatement();
-            txtstatement.setFetchSize(10000);
-            ResultSet rstxt = txtstatement.executeQuery(txtsql);
-
-            while (rstxt.next()) {
-
-                String txt = "";
-
-                switch (experimentType) {
-
-                    case ACM:
-                    case PubMed:
-                        txt = rstxt.getString("text");
-                        instanceBuffer.get(0).add(new Instance(txt.substring(0, Math.min(txt.length() - 1, numChars)), null, rstxt.getString("docid"), "text"));
-
-                        break;
-
-                    default:
-                }
-            }
-
-            if (numModalities > 1) {
-                LOGGER.info(" Getting side info from the database");
-                Statement statement = connection.createStatement();
-                statement.setFetchSize(10000);
                 ResultSet rs = statement.executeQuery(sql);
 
                 while (rs.next()) {
-                    // read the result set
+                    String docid = rstxt.getString("docid");
 
-                    switch (experimentType) {
-
-                        case ACM:
-//                        instanceBuffer.get(0).add(new Instance(rs.getString("Text"), null, rs.getString("pubId"), "text"));
-                            //String txt = rs.getString("text");
-                            //instanceBuffer.get(0).add(new Instance(txt.substring(0, Math.min(txt.length() - 1, numChars)), null, rs.getString("pubId"), "text"));
-
-                            if (numModalities > 1) {
-                                String tmpJournalStr = rs.getString("Keywords");//.replace("\t", ",");
-                                if (tmpJournalStr != null && !tmpJournalStr.equals("")) {
-                                    instanceBuffer.get(1).add(new Instance(tmpJournalStr.replace('-', ' ').toLowerCase(), null, rs.getString("docid"), "Keywords"));
-                                }
-                            }
-
-                            if (numModalities > 2) {
-                                String tmpStr = rs.getString("DBPediaResources");//.replace("\t", ",");
-                                String DBPediaResourceStr = "";
-                                if (tmpStr != null && !tmpStr.equals("")) {
-                                    String[] DBPediaResources = tmpStr.trim().split(",");
-                                    for (int j = 0; j < DBPediaResources.length; j++) {
-                                        String[] pairs = DBPediaResources[j].trim().split(";");
-                                        if (pairs.length == 2) {
-                                            for (int i = 0; i < Integer.parseInt(pairs[1]); i++) {
-                                                DBPediaResourceStr += pairs[0] + ",";
-                                            }
-                                        } else {
-                                            DBPediaResourceStr += DBPediaResources[j] + ",";
-
-                                        }
-                                    }
-                                    DBPediaResourceStr = DBPediaResourceStr.substring(0, DBPediaResourceStr.length() - 1);
-                                    instanceBuffer.get(2).add(new Instance(DBPediaResourceStr, null, rs.getString("docid"), "DBPediaResource"));
-                                }
-                            }
-
-                            if (numModalities > 3) {
-                                String tmpStr = rs.getString("Categories");//.replace("\t", ",");
-                                if (tmpStr != null && !tmpStr.equals("")) {
-
-                                    instanceBuffer.get(3).add(new Instance(tmpStr, null, rs.getString("docid"), "category"));
-                                }
-                            }
-
-                            if (numModalities > 4) {
-                                String tmpStr = rs.getString("Citations");//.replace("\t", ",");
-                                String citationStr = "";
-                                if (tmpStr != null && !tmpStr.equals("")) {
-                                    String[] citations = tmpStr.trim().split(",");
-                                    for (int j = 0; j < citations.length; j++) {
-                                        String[] pairs = citations[j].trim().split(":");
-                                        if (pairs.length == 2) {
-                                            for (int i = 0; i < Integer.parseInt(pairs[1]); i++) {
-                                                citationStr += pairs[0] + ",";
-                                            }
-                                        } else {
-                                            citationStr += citations[j] + ",";
-
-                                        }
-                                    }
-                                    citationStr = citationStr.substring(0, citationStr.length() - 1);
-                                    instanceBuffer.get(4).add(new Instance(citationStr, null, rs.getString("docid"), "citation"));
-                                }
-                            }
-
-                            if (numModalities > 5) {
-                                String tmpAuthorsStr = rs.getString("Venue");//.replace("\t", ",");
-                                if (tmpAuthorsStr != null && !tmpAuthorsStr.equals("")) {
-
-                                    instanceBuffer.get(5).add(new Instance(tmpAuthorsStr, null, rs.getString("docid"), "Venue"));
-                                }
-                            }
-
-//DBPediaResources
-                            if (numModalities > 6) {
-                                String tmpAuthorsStr = rs.getString("Authors");//.replace("\t", ",");
-                                if (tmpAuthorsStr != null && !tmpAuthorsStr.equals("")) {
-
-                                    instanceBuffer.get(6).add(new Instance(tmpAuthorsStr, null, rs.getString("docid"), "author"));
-                                }
-                            }
-
-                            if (numModalities > 7) {
-                                String tmpPeriod = rs.getString("Period");//.replace("\t", ",");
-                                if (tmpPeriod != null && !tmpPeriod.equals("")) {
-
-                                    instanceBuffer.get(7).add(new Instance(tmpPeriod, null, rs.getString("docid"), "period"));
-                                }
-                            }
-
-                            break;
-                        case PubMed:
-                            if (numModalities > 1) {
-                                String tmpJournalStr = rs.getString("Keywords");//.replace("\t", ",");
-                                if (tmpJournalStr != null && !tmpJournalStr.equals("")) {
-                                    instanceBuffer.get(1).add(new Instance(tmpJournalStr.replace('-', ' ').toLowerCase(), null, rs.getString("docid"), "Keywords"));
-                                }
-                            }
-
-                            if (numModalities > 2) {
-                                String tmpMeshTermsStr = rs.getString("meshterms");//.replace("\t", ",");
-                                if (tmpMeshTermsStr != null && !tmpMeshTermsStr.equals("")) {
-                                    instanceBuffer.get(2).add(new Instance(tmpMeshTermsStr.replace('-', ' ').toLowerCase(), null, rs.getString("docid"), "MeshTerms"));
-                                }
-                            }
-
-                            if (numModalities > 3) {
-                                String tmpStr = rs.getString("DBPediaResources");//.replace("\t", ",");
-                                //http://dbpedia.org/resource/Aerosol:3;http://dbpedia.org/resource/Growth_factor:4;http://dbpedia.org/resource/Hygroscopy:4;http://dbpedia.org/resource/Planetary_boundary_layer:3
-                                String DBPediaResourceStr = "";
-                                if (tmpStr != null && !tmpStr.equals("")) {
-                                    String[] DBPediaResources = tmpStr.trim().split(";");
-                                    for (int j = 0; j < DBPediaResources.length; j++) {
-                                        String[] pairs = DBPediaResources[j].trim().split("#");
-                                        if (pairs.length == 2) {
-                                            for (int i = 0; i < Integer.parseInt(pairs[1]); i++) {
-                                                DBPediaResourceStr += pairs[0] + ";";
-                                            }
-                                        } else {
-                                            DBPediaResourceStr += DBPediaResources[j] + ";";
-
-                                        }
-                                    }
-                                    DBPediaResourceStr = DBPediaResourceStr.substring(0, DBPediaResourceStr.length() - 1);
-                                    instanceBuffer.get(3).add(new Instance(DBPediaResourceStr, null, rs.getString("docid"), "DBPediaResources"));
-                                }
-                            }
-
-                            break;
-
-                        default:
+                    if (config.getModalities().contains(Modality.keywords())){
+                        String kw = rs.getString("Keywords");
+                        if (kw != null && !kw.equals("")) inputs.get(Modality.keywords()).add(new Keywords(docid, kw));
                     }
-
+                    if (config.getModalities().contains(Modality.mesh())){
+                        String mesh = rs.getString("meshterms");
+                        if (mesh != null && !mesh.equals("")) inputs.get(Modality.mesh()).add(new Mesh(docid, mesh));
+                    }
+                    if (config.getModalities().contains(Modality.dbpedia())){
+                        String dbp = rs.getString("DBPediaResources");
+                        if (dbp != null && !dbp.equals("")) inputs.get(Modality.dbpedia()).add(new DBPedia(docid, dbp));
+                    }
                 }
             }
 
@@ -1103,45 +938,26 @@ public class SQLTMDataSource extends TMDataSource {
             } catch (SQLException e) {
                 // connection close failed.
                 LOGGER.error(e.getMessage());
-
             }
         }
-
-        for (byte m = (byte) 0; m < numModalities; m++) {
-
-            LOGGER.info("Read " + instanceBuffer.get(m).size() + " instances modality: " + (instanceBuffer.get(m).size() > 0 ? instanceBuffer.get(m).get(0).getSource().toString() : m));
-
-        }
-        return instanceBuffer;
-
     }
-
-
-
-
-
-
-
-
-
-
 
 
     private Double getPhraseBoost(String expid) throws SQLException {
         ResultSet rs = query("select phraseboost from experiment where experimentid = '" + expid + "'");
-        while(rs.next()) return rs.getDouble("phraseboost");
+        while (rs.next()) return rs.getDouble("phraseboost");
         return null;
     }
 
     Map<Integer, Map<String, Integer>> getTokenCountAcrossTopics(String expid) throws SQLException {
         String query = "select item, itemtype, sum(counts) as count from topicanalysis where experimentid = '" + expid + "' group by (item, itemtype);";
         ResultSet rs = query(query);
-        Map<Integer, Map<String, Integer>>  res = new HashMap<>();
-        while (rs.next()){
+        Map<Integer, Map<String, Integer>> res = new HashMap<>();
+        while (rs.next()) {
             int modalityType = rs.getInt("itemtype");
             String token = rs.getString("item");
             int count = rs.getInt("count");
-            if (! res.containsKey(modalityType)) res.put(modalityType, new HashMap<>());
+            if (!res.containsKey(modalityType)) res.put(modalityType, new HashMap<>());
             res.get(modalityType).put(token, count);
         }
         return res;
@@ -1150,12 +966,12 @@ public class SQLTMDataSource extends TMDataSource {
     Map<Integer, Map<Integer, Integer>> getTopicTokenCounts(String expid) throws SQLException {
         String query = "select topicid, itemtype, sum(counts) as count from topicanalysis where experimentid = '" + expid + "' group by (topicid, itemtype);";
         ResultSet rs = query(query);
-        Map<Integer, Map<Integer, Integer>>  res = new HashMap<>();
-        while (rs.next()){
+        Map<Integer, Map<Integer, Integer>> res = new HashMap<>();
+        while (rs.next()) {
             int topicid = rs.getInt("topicid");
             int modalityid = rs.getInt("itemtype");
             int count = rs.getInt("count");
-            if (! res.containsKey(topicid)) res.put(topicid, new HashMap<>());
+            if (!res.containsKey(topicid)) res.put(topicid, new HashMap<>());
             res.get(topicid).put(modalityid, count);
         }
         return res;
@@ -1172,18 +988,18 @@ public class SQLTMDataSource extends TMDataSource {
 
         ResultSet rs = query(query);
 
-        String [] modalityNames = {"Text", "MESH", "DBPedia"};
-        while (rs.next()){
+        String[] modalityNames = {"Text", "MESH", "DBPedia"};
+        while (rs.next()) {
             int topic_id = rs.getInt("topicid");
             int modality_id = rs.getInt("modalityid");
-            String modality_name = (modality_id >=0) ? modalityNames[modality_id] : "Phrase";
+            String modality_name = (modality_id >= 0) ? modalityNames[modality_id] : "Phrase";
             String token_name = rs.getString("item");
             int token_count = rs.getInt("counts");
 
             if (!res.containsKey(topic_id)) res.put(topic_id, new HashMap<>());
             if (!res.get(topic_id).containsKey(modality_name)) res.get(topic_id).put(modality_name, new HashMap<>());
-            if (res.get(topic_id).get(modality_name).containsKey(token_name)){
-                logger.error(String.format("Duplicate token %s for modality %s and topic %d !", token_name, modality_name, topic_id));
+            if (res.get(topic_id).get(modality_name).containsKey(token_name)) {
+                LOGGER.error(String.format("Duplicate token %s for modality %s and topic %d !", token_name, modality_name, topic_id));
             }
             int total_tokens_in_topic = topicTokenCounts.get(topic_id).get(modality_id);
             int total_tokens_across_topics = tokenCountsAcrossTopics.get(modality_id).get(token_name);
@@ -1194,13 +1010,13 @@ public class SQLTMDataSource extends TMDataSource {
 
             // calc token importance
             // this below is the regular topic modelling probability
-            double token_importance_within_topic = ((double)token_count) / total_tokens_in_topic;
+            double token_importance_within_topic = ((double) token_count) / total_tokens_in_topic;
             // this below is the token weight in this topic, compared to other topics
-            double token_importance_across_topics = ((double)token_count) / total_tokens_across_topics;
+            double token_importance_across_topics = ((double) token_count) / total_tokens_across_topics;
 
             if (token_importance_across_topics > 1 || token_importance_within_topic > 1 ||
-                token_importance_across_topics < 0 || token_importance_within_topic < 0) {
-                logger.error(String.format("Problematic weights for topic %d modality %s token %s : within-top: %f accross-top: %f", topic_id, modality_name, token_name, token_importance_within_topic, token_importance_across_topics));
+                    token_importance_across_topics < 0 || token_importance_within_topic < 0) {
+                LOGGER.error(String.format("Problematic weights for topic %d modality %s token %s : within-top: %f accross-top: %f", topic_id, modality_name, token_name, token_importance_within_topic, token_importance_across_topics));
                 continue;
             }
             double token_importance = -1;
@@ -1208,8 +1024,8 @@ public class SQLTMDataSource extends TMDataSource {
                 token_importance = token_importance_within_topic;
             else if (weight_type.equals("across_topics"))
                 token_importance = token_importance_across_topics;
-            else{
-                logger.error("Undefined weight type: " + weight_type);
+            else {
+                LOGGER.error("Undefined weight type: " + weight_type);
                 return null;
             }
 
@@ -1222,7 +1038,8 @@ public class SQLTMDataSource extends TMDataSource {
     }
 
 
-    /** Builds a light weight view of a document object, suitable for visualization
+    /**
+     * Builds a light weight view of a document object, suitable for visualization
      *
      * @param query
      * @param numChars
@@ -1255,7 +1072,8 @@ public class SQLTMDataSource extends TMDataSource {
         return res;
     }
 
-    /** Rroduces a topic: modality: token:weight mapping
+    /**
+     * Rroduces a topic: modality: token:weight mapping
      *
      * @param query
      * @param weight_threshold
@@ -1264,8 +1082,8 @@ public class SQLTMDataSource extends TMDataSource {
      */
     public Map<Integer, Map<String, Double>> getDocumentTopicWeights(String query, double weight_threshold) throws SQLException {
         ResultSet rs = query(query);
-        Map<Integer, Map<String, Double>>  res = new HashMap<>();
-        while(rs.next()){
+        Map<Integer, Map<String, Double>> res = new HashMap<>();
+        while (rs.next()) {
             int topic_id = rs.getInt("topicid");
             String document_id = rs.getString("documentid");
             double weight = rs.getDouble("weight");
@@ -1276,7 +1094,7 @@ public class SQLTMDataSource extends TMDataSource {
         return res;
     }
 
-    public void saveDiagnostics(Config config, List<Score> scores){
+    public void saveDiagnostics(Config config, List<Score> scores) {
         Connection connection = null;
         String current_score = "";
         try {
@@ -1286,7 +1104,7 @@ public class SQLTMDataSource extends TMDataSource {
 
             connection.setAutoCommit(false);
             bulkInsert = connection.prepareStatement(sql);
-            for(Score sc : scores){
+            for (Score sc : scores) {
                 bulkInsert.setString(1, config.getExperimentId());
                 bulkInsert.setString(2, "01");
                 bulkInsert.setString(3, sc.getId());
@@ -1304,14 +1122,14 @@ public class SQLTMDataSource extends TMDataSource {
 
         } catch (SQLException e) {
 
-            logger.error("Exception in save diagnostics score ["+ current_score +"] : "+ e.getMessage());
+            LOGGER.error("Exception in save diagnostics score [" + current_score + "] : " + e.getMessage());
 
             if (connection != null) {
                 try {
-                    logger.error("Transaction is being rolled back \n");
+                    LOGGER.error("Transaction is being rolled back \n");
                     connection.rollback();
                 } catch (SQLException excep) {
-                    logger.error("Error in insert expDiagnostics \n");
+                    LOGGER.error("Error in insert expDiagnostics \n");
                 }
             }
         } finally {
@@ -1319,5 +1137,341 @@ public class SQLTMDataSource extends TMDataSource {
 
     }
 
+    @Override
+    public void saveSemanticAugmentationSingleOutput(List<DBpediaResource> entities, String pubId, DBpediaAnnotator.AnnotatorType annotator) {
+        try {
+
+            PreparedStatement bulkInsert = null;
+            /*
+             PubId      TEXT,
+    Resource   TEXT,
+    Support    INT,
+    Count      INT     DEFAULT (1),
+    Similarity NUMERIC,
+    Mention    TEXT,
+    Confidence DOUBLE,
+    Annotator  TEXT,
+             */
+
+            String insertSql = "insert into doc_dbpediaresource (docid, Resource, Support,  similarity,  mention,confidence, annotator, count ) values (?,?,?,?,?,?,?,1)\n"
+                    + "ON CONFLICT (docid, resource,mention) DO UPDATE SET \n"
+                    + "support=EXCLUDED.Support,\n"
+                    + "similarity=EXCLUDED.similarity, \n"
+                    + " confidence=EXCLUDED.confidence, \n"
+                    + " annotator=EXCLUDED.annotator, \n"
+                    + " count=doc_dbpediaresource.count+1";
+
+            try {
+
+                connection.setAutoCommit(false);
+                bulkInsert = connection.prepareStatement(insertSql);
+                for (DBpediaResource e : entities) {
+
+                    String resource = annotator == DBpediaAnnotator.AnnotatorType.spotlight ? e.getLink().uri : e.getLink().label;
+
+                    bulkInsert.setString(1, pubId);
+                    bulkInsert.setString(2, resource);
+                    bulkInsert.setInt(3, e.getSupport());
+                    bulkInsert.setDouble(4, e.getSimilarity());
+                    bulkInsert.setString(5, e.getMention());
+                    bulkInsert.setDouble(6, e.getConfidence());
+                    bulkInsert.setString(7, annotator.name());
+
+                    //SQlite bulkInsert.setString(8, pubId);
+                    //SQlite bulkInsert.setString(9, resource);
+                    //SQlite bulkInsert.setString(10, e.getMention());
+                    bulkInsert.executeUpdate();
+
+                }
+
+                connection.commit();
+
+            } catch (SQLException e) {
+
+                if (connection != null) {
+                    try {
+                        LOGGER.error("Transaction is being rolled back:" + e.toString());
+                        connection.rollback();
+                    } catch (SQLException excep) {
+                        LOGGER.error("Error in insert doc_dbpediaresource:" + e.toString());
+                    }
+                }
+            } finally {
+
+                if (bulkInsert != null) {
+                    bulkInsert.close();
+                }
+                connection.setAutoCommit(true);
+            }
+
+        } catch (SQLException e) {
+            // if the error message is "out of memory",
+            // it probably means no database file is found
+            LOGGER.error(e.getMessage());
+        } finally {
+            try {
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                // connection close failed.
+                LOGGER.error(e);
+            }
+        }
+
+        if (annotator == DBpediaAnnotator.AnnotatorType.tagMe) {
+            for (DBpediaResource e : entities) {
+                saveSemanticOutputResourceDetails(e);
+            }
+        }
+    }
+
+    @Override
+    public void saveSemanticOutputResourceDetails(DBpediaResource resource) {
+        Connection connection = null;
+        try {
+
+            //INSERT OR IGNORE INTO EVENTTYPE (EventTypeName) VALUES 'ANI Received'
+            String myStatement = " insert into DBpediaResource (Id, URI, label, wikiId, abstract, icd10, mesh, meshid) Values (?, ?, ?, ?, ?,?,?,?) ON CONFLICT (Id) DO NOTHING ";
+            PreparedStatement statement = getConnection().prepareStatement(myStatement);
+            String id = resource.getLinkURI().isEmpty() ? resource.getLink().label : resource.getLink().uri;
+
+            statement.setString(1, id);
+            statement.setString(2, resource.getLink().uri);
+            statement.setString(3, resource.getLink().label);
+            statement.setString(4, resource.getWikiId());
+            statement.setString(5, resource.getWikiAbstract());
+            statement.setString(6, resource.getIcd10());
+            statement.setString(7, resource.getMesh());
+            statement.setString(8, resource.getMeshId());
+            int result = statement.executeUpdate();
+
+            if (result > 0) {
+                PreparedStatement deletestatement = connection.prepareStatement("Delete from DBpediaResourceCategory where ResourceId=?");
+                deletestatement.setString(1, id);
+                deletestatement.executeUpdate();
+
+                deletestatement = connection.prepareStatement("Delete from DBpediaResourceAcronym where ResourceId=?");
+                deletestatement.setString(1, id);
+                deletestatement.executeUpdate();
+
+                deletestatement = connection.prepareStatement("Delete from DBpediaResourceType where ResourceId=?");
+                deletestatement.setString(1, id);
+                deletestatement.executeUpdate();
+
+                PreparedStatement bulkInsert = null;
+
+                String insertSql = "insert into DBpediaResourceCategory (ResourceId, CategoryLabel, CategoryURI) values (?,?, ?)";
+
+                try {
+
+                    connection.setAutoCommit(false);
+                    bulkInsert = connection.prepareStatement(insertSql);
+                    for (DBpediaLink category : resource.getCategories()) {
+                        bulkInsert.setString(1, id);
+                        bulkInsert.setString(2, category.label);
+                        bulkInsert.setString(3, category.uri);
+                        bulkInsert.executeUpdate();
+
+                    }
+
+                    connection.commit();
+
+                } catch (SQLException e) {
+
+                    if (connection != null) {
+                        try {
+                            LOGGER.error("Transaction is being rolled back:" + e.toString());
+                            connection.rollback();
+                            connection.setAutoCommit(true);
+                        } catch (SQLException excep) {
+                            LOGGER.error("Error in insert DBpediaResource Category:" + excep.toString());
+                        }
+                    }
+                } finally {
+
+                    if (bulkInsert != null) {
+                        bulkInsert.close();
+                    }
+                    connection.setAutoCommit(true);
+                }
+
+                insertSql = "insert into DBpediaResourceAcronym (ResourceId, AcronymLabel, AcronymURI) values (?,?, ?)";
+
+                try {
+
+                    connection.setAutoCommit(false);
+                    bulkInsert = connection.prepareStatement(insertSql);
+                    for (DBpediaLink acronym : resource.getAbreviations()) {
+                        bulkInsert.setString(1, id);
+                        bulkInsert.setString(2, acronym.label);
+                        bulkInsert.setString(3, acronym.uri);
+                        bulkInsert.executeUpdate();
+
+                    }
+
+                    connection.commit();
+
+                } catch (SQLException e) {
+
+                    if (connection != null) {
+                        try {
+                            LOGGER.error("Transaction is being rolled back:" + e.toString());
+                            connection.rollback();
+                            connection.setAutoCommit(true);
+                        } catch (SQLException excep) {
+                            LOGGER.error("Error in insert DBpediaResource Acronym:" + excep.toString());
+                        }
+                    }
+                } finally {
+
+                    if (bulkInsert != null) {
+                        bulkInsert.close();
+                    }
+                    connection.setAutoCommit(true);
+                }
+
+                insertSql = "insert into DBpediaResourceType (resourceid, typelabel, typeuri) values (?,?, ?)";
+
+                try {
+
+                    connection.setAutoCommit(false);
+                    bulkInsert = connection.prepareStatement(insertSql);
+                    for (DBpediaLink type : resource.getTypes()) {
+                        bulkInsert.setString(1, id);
+                        bulkInsert.setString(2, type.label);
+                        bulkInsert.setString(3, type.uri);
+                        bulkInsert.executeUpdate();
+
+                    }
+
+                    connection.commit();
+
+                } catch (SQLException e) {
+
+                    if (connection != null) {
+                        try {
+                            LOGGER.error("Transaction is being rolled back:" + e.toString());
+                            connection.rollback();
+                            connection.setAutoCommit(true);
+                        } catch (SQLException excep) {
+                            LOGGER.error("Error in insert DBpediaResource Type:" + excep.toString());
+                        }
+                    }
+                } finally {
+
+                    if (bulkInsert != null) {
+                        bulkInsert.close();
+                    }
+                    connection.setAutoCommit(true);
+                }
+
+            }
+        } catch (SQLException e) {
+            // if the error message is "out of memory",
+            // it probably means no database file is found
+            LOGGER.error(e.getMessage());
+        } finally {
+            try {
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                // connection close failed.
+                LOGGER.error(e);
+            }
+        }
 
     }
+
+
+
+    @Override
+    public void loadSemanticAugmentationInputs(int queueSize) {
+        try {
+            String sql = "select doctxt_view.docid, text,  COALESCE(keywords , ''::text) as keywords \n"
+                    + "from doctxt_view \n"
+                    + "LEFT JOIN ( SELECT doc_subject.docid,\n"
+                    + "    string_agg(DISTINCT doc_subject.subject, ','::text) AS keywords    \n"
+                    + "   FROM  doc_subject     \n"
+                    + "  GROUP BY doc_subject.docid) keywords_view ON keywords_view.docid = doctxt_view.docid \n"
+                    + "LEFT JOIN doc_dbpediaresource ON doctxt_view.docid = doc_dbpediaresource.docid \n"
+                    + "where doc_dbpediaresource.docid is null";
+            getConnection().setAutoCommit(false);
+            Statement statement = connection.createStatement();
+            statement.setFetchSize(queueSize);
+            LOGGER.info("Geting un-annotated publications from the database.");
+            this.semanticAnnotationInputs = statement.executeQuery(sql);
+            LOGGER.info("Query complete. Iterating overresults.");
+        } catch (SQLException e) {
+            // if the error message is "out of memory",
+            // it probably means no database file is found
+            LOGGER.error(e.getMessage());
+        } finally {
+            try {
+                if (connection != null)
+                    connection.close();
+            } catch (SQLException e) { // connection close failed.
+                LOGGER.error(e.getMessage());
+            }
+        }
+    }
+
+    @Override
+    public Text getNextSemanticAugmentationInput(int queueSize) {
+        // prepare the data loading
+        try {
+            if (this.semanticAnnotationInputs == null)
+                this.loadSemanticAugmentationInputs(queueSize);
+
+            while (this.semanticAnnotationInputs.next()) {
+                String txt = this.semanticAnnotationInputs.getString("keywords") + "\n" + this.semanticAnnotationInputs.getString("text");
+                String pubId = this.semanticAnnotationInputs.getString("docid");
+                return new Text(pubId, txt);
+            }
+        } catch (SQLException e) {
+            // if the error message is "out of memory",
+            // it probably means no database file is found
+            LOGGER.error(e.getMessage());
+        }
+        return null;
+    }
+
+    public void loadSemanticDetailExtractionInputs(int queueSize) {
+        try {
+            String sql
+                    = //"select  URI as Resource from DBpediaResource where Label=''";
+                    //optimized query: hashing is much faster than seq scan
+                    "select distinct Resource from doc_dbpediaResource EXCEPT select URI from DBpediaResource";
+
+            getConnection().setAutoCommit(false);
+            Statement statement = getConnection().createStatement();
+            statement.setFetchSize(queueSize);
+            this.semanticDetailExtractionInputs = statement.executeQuery(sql);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                if (connection != null)
+                    connection.close();
+            } catch (SQLException e) { // connection close failed.
+                LOGGER.error(e.getMessage());
+            }
+        }
+    }
+
+
+    public String getNextSemanticDetailExtractionInput(int queueSize){
+        try{
+            if (this.semanticDetailExtractionInputs == null) this.loadSemanticDetailExtractionInputs(queueSize);
+            while (this.semanticDetailExtractionInputs.next()) {
+                return this.semanticDetailExtractionInputs.getString("Resource");
+            }
+        } catch (SQLException e) {
+            LOGGER.error(e.getMessage());
+        }
+        return null;
+    }
+
+
+}

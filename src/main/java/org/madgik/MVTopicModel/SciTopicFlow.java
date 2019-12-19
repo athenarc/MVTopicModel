@@ -2,23 +2,25 @@ package org.madgik.MVTopicModel;
 
 import cc.mallet.pipe.*;
 import cc.mallet.types.*;
-import cc.mallet.util.Maths;
 import com.sree.textbytes.jtopia.Configuration;
 import com.sree.textbytes.jtopia.TermDocument;
 import com.sree.textbytes.jtopia.TermsExtractor;
 import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
-import org.madgik.MVTopicModel.config.Config;
-import org.madgik.MVTopicModel.io.TMDataSource;
-import org.madgik.MVTopicModel.io.TMDataSourceFactory;
+import org.madgik.config.Config;
+import org.madgik.dbpediaspotlightclient.DBpediaAnnotator;
+import org.madgik.io.JsonTMDataSource;
+import org.madgik.io.TMDataSource;
+import org.madgik.io.TMDataSourceFactory;
+import org.madgik.io.modality.Modality;
+import org.madgik.io.modality.Text;
 import org.madgik.utils.CSV2FeatureSequence;
-import org.madgik.MVTopicModel.config.Config.ExperimentType;
+import org.madgik.config.Config.ExperimentType;
 
 import java.io.*;
 import java.sql.*;
 import java.util.*;
 
-import static org.madgik.utils.Utils.cosineSimilarity;
 
 public class SciTopicFlow {
 
@@ -39,13 +41,9 @@ public class SciTopicFlow {
     public static String LOGGERNAME = "SciTopic";
     public static Logger LOGGER = Logger.getLogger(LOGGERNAME);
 
-    private int topWords = 20;
-    private int showTopicsInterval = 50;
     private byte numModalities = 6;
 
     private int numOfThreads = 4;
-    private int numTopics = 400;
-    private int numIterations = 200; //Max 2000
     private int numChars = 4000;
     private int burnIn = 50;
     private int optimizeInterval = 50;
@@ -55,42 +53,42 @@ public class SciTopicFlow {
     private double pruneLblCntPerc = 0.002;   //Remove features that appear less than PruneCntPerc* TotalNumberOfDocuments times (-->very rare features)
     private double pruneMaxPerc = 10;//Remove features that occur in more than (X)% of documents. 0.05 is equivalent to IDF of 3.0.
 
-    private boolean ACMAuthorSimilarity = true;
-    private boolean calcTopicDistributionsAndTrends = false;
-    private boolean calcEntitySimilarities = false;
-    private boolean calcTopicSimilarities = false;
-    private boolean calcPPRSimilarities = false;
-    private boolean runTopicModelling = false; private boolean runInference = true;
-//    private boolean runTopicModelling = true; private boolean runInference = false;
+    private boolean runTopicModelling = false;
+    private boolean runInference = false;
     private boolean runWordEmbeddings = false;
     private boolean useTypeVectors = false;
     private boolean trainTypeVectors = false;
     private boolean findKeyPhrases = false;
 
     private double useTypeVectorsProb = 0.2;
-    private Net2BoWType PPRenabled = Net2BoWType.OneWay;
     private int vectorSize = 200;
     private String SQLConnectionString = "jdbc:postgresql://localhost:5432/tender?user=postgres&password=postgres&ssl=false"; //"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
     private String experimentId = "";
-    private String previousModelFile = "";
     private int limitDocs = 1000;
-    private boolean D4I = true;
 
+    public static String TOPICMODELLING="topicmodelling";
+    public static String INFERENCE="inference";
     public SciTopicFlow() throws IOException {
-        this(null);
+        this(null, null);
     }
 
-    public SciTopicFlow(Map<String, String> runtimeProp) throws IOException {
+    public SciTopicFlow(Map<String, String> runtimeProp, String[] mode) throws IOException {
+        if (mode == null) {
+            mode = new String[1];
+            mode[0]= SciTopicFlow.TOPICMODELLING;
+        }
+        if (Arrays.asList(mode).contains(SciTopicFlow.TOPICMODELLING))
+            runTopicModelling=true;
+        else
+            runTopicModelling = false;
+
+        if (Arrays.asList(mode).contains(SciTopicFlow.INFERENCE)) runInference=true;
+        else runInference=false;
 
         Config config = new Config("config.properties");
         //LOGGER.setLevel(Level.DEBUG);
-        SimilarityType similarityType = SimilarityType.cos; //Cosine 1 jensenShannonDivergence 2 symmetric KLP
-
-        String dictDir = "";
-        Connection connection = null;
         String experimentString = config.makeExperimentString();
         config.makeExperimentDetails();
-        String experimentDescription = experimentString + ": \n";
 
         if (runtimeProp != null) {
             experimentId = runtimeProp.get("ExperimentId");
@@ -107,8 +105,7 @@ public class SciTopicFlow {
 
         if (runWordEmbeddings) {
             LOGGER.info(" calc word embeddings starting");
-            InstanceList[] instances = ImportInstancesWithNewPipes(ReadDataFromDB(SQLConnectionString, experimentType, numModalities, limitDocs, ""), experimentType, numModalities,
-                    pruneCntPerc, pruneLblCntPerc, pruneMaxPerc, false, (experimentType == ExperimentType.PubMed) ? ";" : ",");
+            InstanceList[] instances = ImportInstancesWithNewPipes(ReadDataFromDB(SQLConnectionString, experimentType, numModalities, limitDocs, ""), config);
 
             LOGGER.info(" instances added through pipe");
 
@@ -136,27 +133,6 @@ public class SciTopicFlow {
         if (runInference)
             runInference(config);
 
-        if (calcTopicDistributionsAndTrends) {
-
-            CalcEntityTopicDistributionsAndTrends(SQLConnectionString, experimentId);
-
-        }
-
-        if (calcEntitySimilarities) {
-
-            calcSimilarities(SQLConnectionString, experimentType, experimentId, ACMAuthorSimilarity, similarityType, numTopics);
-
-        }
-
-        if (calcTopicSimilarities) {
-            experimentId = "HEALTHTenderPM_500T_600IT_7000CHRs_10.0 3.0E-4_2.0E-4PRN50B_4M_4TH_cosOneWay";
-            CalcTopicSimilarities(SQLConnectionString, experimentId);
-        }
-
-        if (calcPPRSimilarities) {
-            calcPPRSimilarities(SQLConnectionString);
-        }
-
             Logger.getLogger(SciTopicFlow.LOGGERNAME).info("SciTopicFlow done.");
         }
 
@@ -167,11 +143,15 @@ public class SciTopicFlow {
 
             // input data
             TMDataSource inputDS = TMDataSourceFactory.instantiate(config.getModellingInputDataSourceType(), config.getModellingInputDataSourceParams());
-            ArrayList<ArrayList<Instance>> instanceBuffer = inputDS.getModellingInputs(config);
+            inputDS.getModellingInputs(config);
+            if (config.doComputeNewSemanticAugmentations()) computeSemanticAnnotations(inputDS, config);
+            inputDS.processInputs(config);
 
-            InstanceList[] instances = ImportInstancesWithNewPipes(instanceBuffer, config.getExperimentType(), config.getNumModalities(),
-                    config.getPruneCntPerc(), config.getPruneLblCntPerc(), config.getPruneMaxPerc(), false,
-                    (config.getExperimentType() == ExperimentType.PubMed) ? ";" : ",");
+            ArrayList<ArrayList<Instance>> instanceBuffer = inputDS.getInputInstances();
+
+            InstanceList[] instances = ImportInstancesWithNewPipes(instanceBuffer, config);
+            // save tokenized instances
+            new JsonTMDataSource("tokenized_instances").writeTokenized(instances, config.getModalities(), "tokenized.json");
             LOGGER.info("Instances added through pipe");
 
             // model init
@@ -185,7 +165,8 @@ public class SciTopicFlow {
             double[] gamma = new double[numModalities];
             Arrays.fill(gamma, 1);
             FastQMVWVParallelTopicModel model = new FastQMVWVParallelTopicModel(config.getNumTopics(), (byte) numModalities, alpha, beta,
-                    useCycleProposals, config.getModellingInputDataSourceParams(), useTypeVectors, useTypeVectorsProb, trainTypeVectors);
+                    useCycleProposals, config.getModellingInputDataSourceParams(), useTypeVectors, useTypeVectorsProb, trainTypeVectors, config.getSeed());
+            model.setRandomSeed(config.getSeed());
             model.setSaveSerializedModel(50, "experimentId.model");
             model.setNumIterations(config.getNumIterations());
             model.setTopicDisplay(config.getShowTopicsInterval(), config.getNumTopWords());
@@ -205,8 +186,11 @@ public class SciTopicFlow {
             LOGGER.info("Model estimated");
             model.doPostEstimationCalculations();
 
-            output.saveTopicsAndExperiment(config, model.getTopicAnalysisList(), model.getTopicDetailsList(), model.getSerializedModel(), model.getExperimentMetadata());
-            model.computeDocumentAssignments(0.03);
+            Object modelToSave = model.getInferencer();
+            if (output.isNeedsSerializedModel())
+                modelToSave = model.getSerializedModel();
+            output.saveTopicsAndExperiment(config, model.getTopicAnalysisList(), model.getTopicDetailsList(), modelToSave, model.getExperimentMetadata());
+            model.computeDocumentAssignments(0.00);
             output.saveDocumentTopicAssignments(config, model.getDocTopicMap(), config.getModellingOutputDataSourceParams());
             // model.saveResults(config.getModellingInputDataSourceParams(), config.getExperimentId(), config.getExperimentDetails());
             LOGGER.info("Model saved");
@@ -228,38 +212,50 @@ public class SciTopicFlow {
             }
         }
 
+        void computeSemanticAnnotations(TMDataSource inferenceDs, Config config){
+            if (config.getModalities().contains(Modality.type.dbpedia.name())) {
+                LOGGER.warn("Specified to extract modalities but they are already contained in the loaded inference data. Will replace.");
+                inferenceDs.clearRawInputData(Modality.type.dbpedia.name());
+            }
+            DBpediaAnnotator dbann = new DBpediaAnnotator(config);
+            List<Text> texts = new ArrayList<>();
+            for(Modality text: inferenceDs.getRawInput(Modality.text())) texts.add((Text) text);
+            dbann.setSemanticAugmentationInputs(texts);
+            // run semantic augmentation and enrichment
+            dbann.annotatePubs();
+            dbann.updateResourceDetails();
+            List<Modality> sems = dbann.getSemanticAnnotationModalityList();
+            inferenceDs.setRawInput(sems, Modality.type.dbpedia.name());
+        }
+
         void runInference(Config config) throws IOException {
 
                 LOGGER.info("Inference on new docs has started");
-                String batchId = "-1";
 
                 LOGGER.info("Loading inference model");
-                FastQMVWVTopicInferencer inferencer = null;
+
                 TMDataSource infModelDS = TMDataSourceFactory.instantiate(config.getInferenceModelDataSourceType(), config.getInferenceModelDataSourceParams());
-                inferencer = infModelDS.getInferenceModel(config);
+                FastQMVWVTopicInferencer inferencer = infModelDS.getInferenceModel(config);
+                inferencer.setRandomSeed(config.getSeed());
+
                 LOGGER.info("Loaded inference model");
-
-
-//                try {
-//                    LOGGER.info("Deserializing topic model from experiment " + experimentId);
-//                    inferencer = FastQMVWVTopicInferencer.read(SQLConnectionString, experimentId);
-//                } catch (Exception e) {
-//                    LOGGER.error("Unable to restore saved topic model "
-//                            + experimentId + ": " + e);
-//
-//                }
-
 
                 LOGGER.info("Getting input data for inference");
                 TMDataSource inferenceDs = TMDataSourceFactory.instantiate(config.getInferenceDataSourceType(), config.getInferenceDataSourceParams());
-                ArrayList<ArrayList<Instance>> instanceBuffer = inferenceDs.getInferenceInputs(config);
-                // ArrayList<ArrayList<Instance>> instanceBuffer = ReadDataFromDB(SQLConnectionString, experimentType, numModalities, 10, "WHERE batchid>'2018'");
+                inferenceDs.getInferenceInputs(config);
+
+                if (config.doComputeNewSemanticAugmentations()) computeSemanticAnnotations(inferenceDs, config);
+
+                inferenceDs.processInputs(config);
+                ArrayList<ArrayList<Instance>> instanceBuffer = inferenceDs.getInputInstances();
+
                 InstanceList[] instances = ImportInstancesWithExistingPipes(instanceBuffer, inferencer.getPipes(), config.getNumModalities());
                 LOGGER.info("Added " + instances.length + " instances through pipe. Beginning inference.");
 
                 inferencer.inferTopicDistributionsOnNewDocs(instances);
-                inferencer.computeDocumentAssignments(0.03);
+                inferencer.computeDocumentAssignments(0.00);
 
+                // write output
                 TMDataSource infOutDS = TMDataSourceFactory.instantiate(config.getInferenceOutputDataSourceType(), config.getInferenceOutputDataSourceParams());
                 infOutDS.saveDocumentTopicAssignments(config, inferencer.getDocTopicMap(), config.getInferenceOutputDataSourceParams());
                 LOGGER.info("Inference on " + instances[0].size() + " instances completed.");
@@ -686,809 +682,10 @@ public class SciTopicFlow {
         if (docProportionMaxCutoff < 1.0) {
             docCounter.addPrunedWordsToStoplist(prunedTokenizer, docProportionMaxCutoff);
         }
-
-//        if (pruneCount > 0) {
-//            featureCounter.addPrunedWordsToStoplist(prunedTokenizer, pruneCount);
-//        }
-//        if (docProportionMaxCutoff < 1.0 || docProportionMinCutoff > 0) {
-//            docCounter.addPrunedWordsToStoplist(prunedTokenizer, docProportionMaxCutoff, docProportionMinCutoff);
-//        }
-    }
-
-    public void createCitationGraphFile(String outputCsv, String SQLConnectionString) {
-        //String SQLConnectionString = "jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
-
-        Connection connection = null;
-        try {
-
-            FileWriter fwrite = new FileWriter(outputCsv);
-            BufferedWriter out = new BufferedWriter(fwrite);
-            String header = "# DBLP citation graph \n"
-                    + "# fromNodeId, toNodeId \n";
-            out.write(header);
-
-            connection = DriverManager.getConnection(SQLConnectionString);
-
-            String sql = "select id, ref_id from papers where ref_num >0 ";
-            Statement statement = connection.createStatement();
-            ResultSet rs = statement.executeQuery(sql);
-            while (rs.next()) {
-                // read the result set
-                int Id = rs.getInt("Id");
-                String citationNums = rs.getString("ref_id");
-
-                String csvLine = "";//Id + "\t" + citationNums;
-
-                String[] str = citationNums.split("\t");
-                for (int i = 0; i < str.length - 1; i++) {
-                    csvLine = Id + "\t" + str[i];
-                    out.write(csvLine + "\n");
-                }
-
-            }
-            out.flush();
-        } catch (SQLException e) {
-            // if the error message is "out of memory", 
-            // it probably means no database file is found
-            LOGGER.error(e.getMessage());
-        } catch (Exception e) {
-            LOGGER.error("File input error");
-        } finally {
-            try {
-                if (connection != null) {
-                    connection.close();
-                }
-            } catch (SQLException e) {
-                // connection close failed.
-                LOGGER.error(e);
-            }
-        }
-
-    }
-
-    private class TopicVector {
-
-        public int TopicId;
-        public String ExperimentId;
-        public double[] Vector;
-    }
-
-    public boolean isAlphanumeric(String str) {
-
-        return str.matches("^(?!.*(-[^-]*-|_[^_]*_))[A-Za-z0-9][\\w-]*[A-Za-z0-9]$");
-        //Pattern p = Pattern.compile("[^a-zA-Z0-9]+$");
-
-    }
-
-    public void CalcEntityTopicDistributionsAndTrends(String SQLConnectionString, String experimentId) {
-        Connection connection = null;
-        try {
-
-            connection = DriverManager.getConnection(SQLConnectionString);
-            Statement statement = connection.createStatement();
-
-            LOGGER.info("Calc topic Entity Topic Distributions and Trends started");
-
-            String deleteSQL = String.format("Delete from EntityTopicDistribution where ExperimentId= '%s'", experimentId);
-            statement.executeUpdate(deleteSQL);
-
-            LOGGER.info("Insert Full Topic Distribution ");
-
-            String SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                    + "select '',  doc_topic.TopicId, '', 'Corpus', round(sum(weight)/SumTopicWeightView.SumWeight, 5) as NormWeight, doc_topic.ExperimentId\n"
-                    + "from doc_topic\n"
-                    + "INNER JOIN (SELECT  sum(weight) AS SumWeight, ExperimentId\n"
-                    + "FROM doc_topic\n"
-                    + "Where doc_topic.weight>0.1 \n"
-                    + " and doc_topic.ExperimentId='" + experimentId + "'  \n"
-                    + "GROUP BY  ExperimentId) SumTopicWeightView on SumTopicWeightView.ExperimentId= doc_topic.ExperimentId\n"
-                    + "group By doc_topic.TopicId, doc_topic.ExperimentId, SumTopicWeightView.SumWeight\n"
-                    + "Order by  NormWeight Desc";
-
-            statement.executeUpdate(SQLstr);
-
-            statement.executeUpdate(SQLstr);
-
-            if (experimentType == ExperimentType.ACM) {
-
-                LOGGER.info("Trend Topic distribution for the whole coprus");
-
-                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                        + "select Document.BatchId,  doc_topic.TopicId, '', 'CorpusTrend', \n"
-                        + "round(sum(weight)/SumTopicWeightPerBatchView.BatchSumWeight,5) as NormWeight,  doc_topic.ExperimentId\n"
-                        + "from doc_topic\n"
-                        + "Inner Join Document on doc_topic.docid= document.docid and doc_topic.weight>0.1\n"
-                        + "INNER JOIN (SELECT Document.BatchId, sum(weight) AS BatchSumWeight, ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "INNER JOIN Document ON doc_topic.docid= Document.docid AND\n"
-                        + "doc_topic.weight>0.1\n "
-                        + "and doc_topic.ExperimentId='" + experimentId + "'   \n"
-                        + "GROUP BY Document.BatchId, ExperimentId) SumTopicWeightPerBatchView on SumTopicWeightPerBatchView.BatchId = Document.BatchId and SumTopicWeightPerBatchView.ExperimentId= doc_topic.ExperimentId\n"
-                        + "group By Document.BatchId,SumTopicWeightPerBatchView.BatchSumWeight, doc_topic.TopicId, doc_topic.ExperimentId\n"
-                        + "Order by Document.BatchId,   NormWeight Desc";
-
-                statement.executeUpdate(SQLstr);
-
-                LOGGER.info("Repository Topic distribution for the whole coprus");
-
-                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                        + "select '',  doc_topic.TopicId, Document.Repository, 'Repository', \n"
-                        + "round(sum(weight)/SumTopicWeightPerBatchView.BatchSumWeight,5) as NormWeight,  doc_topic.ExperimentId\n"
-                        + "from doc_topic\n"
-                        + "Inner Join Document on doc_topic.docid= document.docid and doc_topic.weight>0.1\n"
-                        + "INNER JOIN (SELECT Document.Repository, sum(weight) AS BatchSumWeight, ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "INNER JOIN Document ON doc_topic.docid= Document.docid AND\n"
-                        + "doc_topic.weight>0.1\n "
-                        + "and doc_topic.ExperimentId='" + experimentId + "'   \n"
-                        + "GROUP BY Document.Repository, ExperimentId) SumTopicWeightPerBatchView on SumTopicWeightPerBatchView.Repository = Document.Repository and SumTopicWeightPerBatchView.ExperimentId= doc_topic.ExperimentId\n"
-                        + "group By Document.Repository,SumTopicWeightPerBatchView.BatchSumWeight, doc_topic.TopicId, doc_topic.ExperimentId\n"
-                        + "Order by Document.Repository,   NormWeight Desc";
-
-                statement.executeUpdate(SQLstr);
-
-                LOGGER.info("Author Topic distribution");
-
-                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                        + "SELECT '', doc_topic.TopicId, Doc_author.AuthorId,'Author',\n"
-                        + "                              round(sum(doc_topic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
-                        + "                                doc_topic.ExperimentId\n"
-                        + "                         FROM doc_topic\n"
-                        + "                         INNER JOIN  Doc_author ON doc_topic.Docid = Doc_author.Docid AND doc_topic.weight > 0.1\n"
-                        + "      and  doc_topic.ExperimentId='" + experimentId + "' \n"
-                        + "                              INNER JOIN (SELECT Doc_author.authorid, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
-                        + "                              FROM doc_topic\n"
-                        + "                              INNER JOIN   Doc_author ON doc_topic.Docid = Doc_author.Docid AND  doc_topic.weight > 0.1\n"
-                        + "                              GROUP BY  ExperimentId,Doc_author.AuthorId)\n"
-                        + "                              SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.AuthorId = Doc_author.AuthorId AND \n"
-                        + "                                                              SumTopicWeightPerProjectView.ExperimentId = doc_topic.ExperimentId                                        \n"
-                        + "                        GROUP BY Doc_author.AuthorId,\n"
-                        + "                                 SumTopicWeightPerProjectView.ProjectSumWeight,\n"
-                        + "                                 doc_topic.TopicId,\n"
-                        + "                                 doc_topic.ExperimentId\n"
-                        + "                                 order by  doc_topic.ExperimentId, Doc_author.AuthorId, NormWeight Desc,doc_topic.ExperimentId";
-
-                statement.executeUpdate(SQLstr);
-
-                LOGGER.info("Journal Topic distribution");
-
-                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                        + "SELECT '', doc_topic.TopicId, Doc_journal.issn,'Journal',\n"
-                        + "round(sum(doc_topic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
-                        + "doc_topic.ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "INNER JOIN  doc_journal ON doc_topic.Docid = doc_journal.Docid AND doc_topic.weight > 0.1\n"
-                        + " and  doc_topic.ExperimentId='" + experimentId + "' \n"
-                        + "INNER JOIN (SELECT doc_journal.issn, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "INNER JOIN   doc_journal ON doc_topic.Docid = doc_journal.Docid AND  doc_topic.weight > 0.1\n"
-                        + "GROUP BY  ExperimentId,doc_journal.issn) SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.issn = doc_journal.issn AND SumTopicWeightPerProjectView.ExperimentId = doc_topic.ExperimentId                                        \n"
-                        + "GROUP BY doc_journal.issn,SumTopicWeightPerProjectView.ProjectSumWeight,doc_topic.TopicId, doc_topic.ExperimentId\n"
-                        + "order by  doc_topic.ExperimentId, doc_journal.issn, NormWeight Desc,doc_topic.ExperimentId";
-
-                statement.executeUpdate(SQLstr);
-
-                LOGGER.info("Journal Trend Topic distribution");
-
-                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                        + "SELECT Document.batchId, doc_topic.TopicId, doc_journal.issn,'JournalTrend',\n"
-                        + "round(sum(doc_topic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight, doc_topic.ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "INNER JOIN Document on doc_topic.docid= document.docid and doc_topic.weight>0.1\n"
-                        + " and  doc_topic.ExperimentId='" + experimentId + "' \n"
-                        + "INNER JOIN  doc_journal ON doc_topic.docid = doc_journal.docid                           \n"
-                        + "INNER JOIN (SELECT doc_journal.issn, document.batchId, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "Inner Join Document on doc_topic.docid= document.docid and doc_topic.weight>0.1           \n"
-                        + "INNER JOIN   doc_journal ON doc_topic.docid = doc_journal.docid                                \n"
-                        + "GROUP BY  doc_journal.issn,Document.batchId,ExperimentId) SumTopicWeightPerProjectView \n"
-                        + "ON SumTopicWeightPerProjectView.issn = doc_journal.issn AND SumTopicWeightPerProjectView.ExperimentId = doc_topic.ExperimentId  AND SumTopicWeightPerProjectView.batchId = Document.batchId\n"
-                        + "GROUP BY doc_journal.issn,Document.batchId, SumTopicWeightPerProjectView.ProjectSumWeight,doc_topic.TopicId,doc_topic.ExperimentId\n"
-                        + "order by  doc_topic.ExperimentId, doc_journal.issn, NormWeight Desc,doc_topic.ExperimentId";
-
-                statement.executeUpdate(SQLstr);
-
-                LOGGER.info("Conference Topic distribution");
-
-                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                        + "SELECT '', doc_topic.TopicId, doc_conference.acronymBase,'Conference',\n"
-                        + "round(sum(doc_topic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
-                        + "doc_topic.ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "INNER JOIN  doc_conference ON doc_topic.Docid = doc_conference.Docid AND doc_topic.weight > 0.1\n"
-                        + " and  doc_topic.ExperimentId='" + experimentId + "' \n"
-                        + "INNER JOIN (SELECT doc_conference.acronymBase, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "INNER JOIN   doc_conference ON doc_topic.Docid = doc_conference.Docid AND  doc_topic.weight > 0.1\n"
-                        + "GROUP BY  ExperimentId,doc_conference.acronymBase) SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.acronymBase = doc_conference.acronymBase AND SumTopicWeightPerProjectView.ExperimentId = doc_topic.ExperimentId                                        \n"
-                        + "GROUP BY doc_conference.acronymBase,SumTopicWeightPerProjectView.ProjectSumWeight,doc_topic.TopicId, doc_topic.ExperimentId\n"
-                        + "order by  doc_topic.ExperimentId, doc_conference.acronymBase, NormWeight Desc,doc_topic.ExperimentId";
-
-                statement.executeUpdate(SQLstr);
-
-                LOGGER.info("Conference Trend Topic distribution");
-
-                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                        + " SELECT Document.batchId, doc_topic.TopicId, doc_conference.acronymBase,'ConferenceTrend',\n"
-                        + "round(sum(doc_topic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight, doc_topic.ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "INNER JOIN Document on doc_topic.docid= document.docid and doc_topic.weight>0.1\n"
-                        + " and  doc_topic.ExperimentId='" + experimentId + "' \n"
-                        + "INNER JOIN  doc_conference ON doc_topic.docid = doc_conference.docid                           \n"
-                        + "INNER JOIN (SELECT doc_conference.acronymBase, document.batchId, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "Inner Join Document on doc_topic.docid= document.docid and doc_topic.weight>0.1           \n"
-                        + "INNER JOIN   doc_conference ON doc_topic.docid = doc_conference.docid                                \n"
-                        + "GROUP BY  doc_conference.acronymBase,Document.batchId,ExperimentId) SumTopicWeightPerProjectView \n"
-                        + "ON SumTopicWeightPerProjectView.acronymBase = doc_conference.acronymBase AND SumTopicWeightPerProjectView.ExperimentId = doc_topic.ExperimentId  AND SumTopicWeightPerProjectView.batchId = Document.batchId\n"
-                        + "GROUP BY doc_conference.acronymBase,Document.batchId, SumTopicWeightPerProjectView.ProjectSumWeight,doc_topic.TopicId,doc_topic.ExperimentId\n"
-                        + "order by  doc_topic.ExperimentId, doc_conference.acronymBase, NormWeight Desc,doc_topic.ExperimentId";
-
-                statement.executeUpdate(SQLstr);
-
-            }
-
-            if (experimentType == ExperimentType.PubMed) {
-
-                LOGGER.info("Trend Topic distribution for the whole coprus");
-
-                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                        + "select Document.BatchId,  doc_topic.TopicId, '', 'CorpusTrend', \n"
-                        + "round(sum(weight)/SumTopicWeightPerBatchView.BatchSumWeight,5) as NormWeight,  doc_topic.ExperimentId\n"
-                        + "from doc_topic\n"
-                        + "Inner Join Document on doc_topic.docid= document.id and doc_topic.weight>0.1\n"
-                        + "INNER JOIN (SELECT Document.BatchId, sum(weight) AS BatchSumWeight, ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "INNER JOIN Document ON doc_topic.docid= Document.id AND\n"
-                        + "doc_topic.weight>0.1\n "
-                        + "and doc_topic.ExperimentId='" + experimentId + "'   \n"
-                        + "GROUP BY Document.BatchId, ExperimentId) SumTopicWeightPerBatchView on SumTopicWeightPerBatchView.BatchId = Document.BatchId and SumTopicWeightPerBatchView.ExperimentId= doc_topic.ExperimentId\n"
-                        + "group By Document.BatchId,SumTopicWeightPerBatchView.BatchSumWeight, doc_topic.TopicId, doc_topic.ExperimentId\n"
-                        + "Order by Document.BatchId,   NormWeight Desc";
-
-                statement.executeUpdate(SQLstr);
-
-                LOGGER.info("Project Topic distribution");
-
-                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                        + "SELECT '', doc_topic.TopicId, Doc_Project.ProjectId,'Project',\n"
-                        + "           round(sum(doc_topic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
-                        + "             doc_topic.ExperimentId\n"
-                        + "      FROM doc_topic\n"
-                        + "      INNER JOIN  Doc_Project ON doc_topic.docid = Doc_Project.Docid AND doc_topic.weight > 0.1\n"
-                        + "      and  doc_topic.ExperimentId='" + experimentId + "' \n"
-                        + "           INNER JOIN (SELECT Doc_Project.ProjectId, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
-                        + "           FROM doc_topic\n"
-                        + "           INNER JOIN   Doc_Project ON doc_topic.docid = Doc_Project.docid AND  doc_topic.weight > 0.1\n"
-                        + "           GROUP BY  ExperimentId,Doc_Project.ProjectId)\n"
-                        + "           SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.ProjectId = Doc_Project.ProjectId AND \n"
-                        + "                                           SumTopicWeightPerProjectView.ExperimentId = doc_topic.ExperimentId                                            \n"
-                        + "     GROUP BY Doc_Project.ProjectId,\n"
-                        + "              SumTopicWeightPerProjectView.ProjectSumWeight,\n"
-                        + "              doc_topic.TopicId,\n"
-                        + "              doc_topic.ExperimentId\n"
-                        + "              order by  doc_topic.ExperimentId, Doc_Project.ProjectId, NormWeight Desc,doc_topic.ExperimentId";
-
-                statement.executeUpdate(SQLstr);
-
-                LOGGER.info("Funder Topic distribution");
-                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                        + " SELECT '', doc_topic.TopicId, doc_funder_view.funder,'Funder',\n"
-                        + "                               round(sum(doc_topic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight,\n"
-                        + "                                 doc_topic.ExperimentId\n"
-                        + "                          FROM doc_topic\n"
-                        + "                          INNER JOIN  doc_funder_view ON doc_topic.docid = doc_funder_view.docid AND doc_topic.weight > 0.1\n"
-                        + "                          and  doc_topic.ExperimentId='" + experimentId + "' \n"
-                        + "                        \n"
-                        + "                               INNER JOIN (SELECT doc_funder_view.funder, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
-                        + "                               FROM doc_topic\n"
-                        + "                               INNER JOIN   doc_funder_view ON doc_topic.docid = doc_funder_view.docid AND  doc_topic.weight > 0.1\n"
-                        + "                               \n"
-                        + "                               GROUP BY  ExperimentId,doc_funder_view.funder)\n"
-                        + "                               SumTopicWeightPerProjectView ON SumTopicWeightPerProjectView.funder = doc_funder_view.funder AND \n"
-                        + "                                                               SumTopicWeightPerProjectView.ExperimentId = doc_topic.ExperimentId                                            \n"
-                        + "                         GROUP BY doc_funder_view.funder,\n"
-                        + "                                  SumTopicWeightPerProjectView.ProjectSumWeight,\n"
-                        + "                                  doc_topic.TopicId,\n"
-                        + "                                  doc_topic.ExperimentId\n"
-                        + "                                  order by  doc_topic.ExperimentId, doc_funder_view.funder, NormWeight Desc,doc_topic.ExperimentId";
-
-                statement.executeUpdate(SQLstr);
-
-                LOGGER.info("Funder Trend Topic distribution");
-
-                SQLstr = "INSERT INTO EntityTopicDistribution (BatchId , TopicId ,  EntityId, EntityType,  NormWeight , ExperimentId )\n"
-                        + "SELECT Document.batchId, doc_topic.TopicId, doc_funder_view.funder,'FunderTrend',\n"
-                        + "round(sum(doc_topic.weight) / SumTopicWeightPerProjectView.ProjectSumWeight,5) AS NormWeight, doc_topic.ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "INNER JOIN Document on doc_topic.docid= document.id and doc_topic.weight>0.1\n"
-                        + " and  doc_topic.ExperimentId='" + experimentId + "' \n"
-                        + "INNER JOIN  doc_funder_view ON doc_topic.docid = doc_funder_view.docid                           \n"
-                        + "INNER JOIN (SELECT doc_funder_view.funder, document.batchId, sum(weight) AS ProjectSumWeight,    ExperimentId\n"
-                        + "FROM doc_topic\n"
-                        + "Inner Join Document on doc_topic.docid= document.id and doc_topic.weight>0.1           \n"
-                        + "INNER JOIN   doc_funder_view ON doc_topic.docid = doc_funder_view.docid                                \n"
-                        + "GROUP BY  doc_funder_view.funder,Document.batchId,ExperimentId) SumTopicWeightPerProjectView \n"
-                        + "ON SumTopicWeightPerProjectView.funder = doc_funder_view.funder AND SumTopicWeightPerProjectView.ExperimentId = doc_topic.ExperimentId  AND SumTopicWeightPerProjectView.batchId = Document.batchId\n"
-                        + "GROUP BY doc_funder_view.funder,Document.batchId, SumTopicWeightPerProjectView.ProjectSumWeight,doc_topic.TopicId,doc_topic.ExperimentId\n"
-                        + "order by  doc_topic.ExperimentId, doc_funder_view.funder, NormWeight Desc,doc_topic.ExperimentId";
-
-                statement.executeUpdate(SQLstr);
-
-            }
-            LOGGER.info("Entity and trends topic distribution finished");
-
-        } catch (SQLException e) {
-            // if the error message is "out of memory", 
-            // it probably means no database file is found
-            System.err.println(e.getMessage());
-        } finally {
-            try {
-                if (connection != null) {
-                    connection.close();
-                }
-            } catch (SQLException e) {
-                // connection close failed.
-                System.err.println(e);
-            }
-        }
-
-        LOGGER.info("Topic similarities calculation finished");
-
-    }
-
-    public void CalcTopicSimilarities(String SQLConnectionString, String experimentId) {
-
-        Connection connection = null;
-        try {
-
-            connection = DriverManager.getConnection(SQLConnectionString);
-            Statement statement = connection.createStatement();
-
-            LOGGER.info("Calc topic similarities started");
-
-            String distinctTopicsSQL = "Select  TopicId,  ExperimentId, count(*) as cnt\n"
-                    + "from TopicVector\n  "
-                    + (StringUtils.isBlank(experimentId) ? "" : String.format("where experimentId = '%s' \n  ", experimentId))
-                    + "group by TopicId,  ExperimentId";
-
-            ResultSet rs = statement.executeQuery(distinctTopicsSQL);
-
-            List<TopicVector> topicVectors = new ArrayList<TopicVector>();
-
-            while (rs.next()) {
-
-                TopicVector topicVector = new TopicVector();
-
-                topicVector.ExperimentId = rs.getString("ExperimentId");
-                topicVector.TopicId = rs.getInt("TopicId");
-                //String newLabelId = experimentId + "_" + topicId;
-                int dimension = rs.getInt("cnt");
-                topicVector.Vector = new double[dimension];
-
-                String selectVectorSQL = String.format("Select Weight from topicVector where ExperimentId= '%s'  and TopicId=%d order by ColumnId", topicVector.ExperimentId, topicVector.TopicId);
-
-                Statement statement2 = connection.createStatement();
-                ResultSet rs1 = statement2.executeQuery(selectVectorSQL);
-                int cnt = 0;
-                while (rs1.next()) {
-                    topicVector.Vector[cnt++] = rs1.getDouble("Weight");
-                }
-
-                topicVectors.add(topicVector);
-
-            }
-
-            double similarity = 0;
-            double similarityThreshold = 0.3;
-
-            statement.executeUpdate("create table if not exists TopicSimilarity (ExperimentId1 TEXT, TopicId1 TEXT, ExperimentId2 TEXT, TopicId2 TEXT, Similarity double) ");
-            String deleteSQL = String.format("Delete from TopicSimilarity");
-            statement.executeUpdate(deleteSQL);
-
-            PreparedStatement bulkInsert = null;
-            String insertSql = "insert into TopicSimilarity values(?,?,?,?,?);";
-
-            try {
-
-                connection.setAutoCommit(false);
-                bulkInsert = connection.prepareStatement(insertSql);
-
-                for (int t1 = 0; t1 < topicVectors.size(); t1++) {
-                    for (int t2 = t1; t2 < topicVectors.size(); t2++) {
-
-                        similarity = Math.max(cosineSimilarity(topicVectors.get(t1).Vector, topicVectors.get(t2).Vector), 0);
-
-                        if (similarity > similarityThreshold && !(topicVectors.get(t1).TopicId == topicVectors.get(t2).TopicId && topicVectors.get(t1).ExperimentId == topicVectors.get(t2).ExperimentId)) {
-
-                            bulkInsert.setString(1, topicVectors.get(t1).ExperimentId);
-                            bulkInsert.setInt(2, topicVectors.get(t1).TopicId);
-                            bulkInsert.setString(3, topicVectors.get(t2).ExperimentId);
-                            bulkInsert.setInt(4, topicVectors.get(t2).TopicId);
-                            bulkInsert.setDouble(5, (double) Math.round(similarity * 1000) / 1000);
-
-                            bulkInsert.executeUpdate();
-                        }
-                    }
-                }
-
-                connection.commit();
-
-            } catch (SQLException e) {
-
-                if (connection != null) {
-                    try {
-                        LOGGER.error("Transaction is being rolled back");
-                        connection.rollback();
-                    } catch (SQLException excep) {
-                        LOGGER.error("Error in insert grantSimilarity");
-                    }
-                }
-            } finally {
-
-                if (bulkInsert != null) {
-                    bulkInsert.close();
-                }
-                connection.setAutoCommit(true);
-            }
-
-        } catch (SQLException e) {
-            // if the error message is "out of memory", 
-            // it probably means no database file is found
-            LOGGER.error(e.getMessage());
-        } finally {
-            try {
-                if (connection != null) {
-                    connection.close();
-                }
-            } catch (SQLException e) {
-                // connection close failed.
-                LOGGER.error(e);
-            }
-        }
-
-        LOGGER.info("Topic similarities calculation finished");
-
-    }
-
-    public void calcPPRSimilarities(String SQLConnectionString) {
-        //calc similarities
-
-        //LOGGER.info("PPRSimilarities calculation Started");
-        Connection connection = null;
-        try {
-            // create a database connection
-            //connection = DriverManager.getConnection(SQLConnectionString);
-            connection = DriverManager.getConnection(SQLConnectionString);
-            Statement statement = connection.createStatement();
-
-            LOGGER.info("PPRSimilarities calculation Started");
-
-            String sql = "SELECT source.OrigId||'PPR' AS PubID, target.OrigId  AS CitationId, prLinks.Counts As Counts FROM prLinks\n"
-                    + "INNER JOIN PubCitationPPRAlias source ON source.RowId = PrLinks.Source\n"
-                    + "INNER JOIN PubCitationPPRAlias target ON target.RowId = PrLinks.Target\n"
-                    + "Union\n"
-                    + "Select Doc_id, CitationId, 1 as Counts From PubCitation\n"
-                    + "ORDER by Doc_id ";
-
-            ResultSet rs = statement.executeQuery(sql);
-
-            HashMap<String, SparseVector> labelVectors = null;
-            //HashMap<String, double[]> similarityVectors = null;
-            labelVectors = new HashMap<String, SparseVector>();
-
-            String labelId = "";
-
-            int[] citations = new int[350];
-            double[] weights = new double[350];
-            int cnt = 0;
-
-            while (rs.next()) {
-
-                String newLabelId = "";
-                newLabelId = rs.getString("Doc_id");
-                if (!newLabelId.equals(labelId) && !labelId.isEmpty()) {
-                    labelVectors.put(labelId, new SparseVector(citations, weights, citations.length, citations.length, true, true, true));
-                    citations = new int[350];
-                    weights = new double[350];
-                    cnt = 0;
-                }
-                labelId = newLabelId;
-                citations[cnt] = rs.getInt("CitationId");
-                weights[cnt] = rs.getDouble("Counts");
-                cnt++;
-
-            }
-
-            cnt = 0;
-            double similarity = 0;
-
-            NormalizedDotProductMetric cosineSimilarity = new NormalizedDotProductMetric();
-
-            statement.executeUpdate("create table if not exists PPRPubCitationSimilarity (Doc_id TEXT,  Similarity double) ");
-            String deleteSQL = String.format("Delete from PPRPubCitationSimilarity");
-            statement.executeUpdate(deleteSQL);
-
-            PreparedStatement bulkInsert = null;
-            sql = "insert into PPRPubCitationSimilarity values(?,?);";
-
-            try {
-
-                connection.setAutoCommit(false);
-                bulkInsert = connection.prepareStatement(sql);
-
-                for (String fromDoc_id : labelVectors.keySet()) {
-
-                    if (fromDoc_id.contains("PPR")) {
-                        continue;
-                    }
-                    String toDoc_id = fromDoc_id + "PPR";
-                    similarity = -1;
-
-                    if (labelVectors.get(fromDoc_id) != null && labelVectors.get(toDoc_id) != null) {
-                        similarity = 1 - Math.abs(cosineSimilarity.distance(labelVectors.get(fromDoc_id), labelVectors.get(toDoc_id))); // the function returns distance not similarity
-                    }
-                    bulkInsert.setString(1, fromDoc_id);
-                    bulkInsert.setDouble(2, (double) Math.round(similarity * 1000) / 1000);
-
-                    bulkInsert.executeUpdate();
-
-                }
-
-                connection.commit();
-
-            } catch (SQLException e) {
-
-                if (connection != null) {
-                    try {
-                        LOGGER.error("Transaction is being rolled back");
-                        connection.rollback();
-                    } catch (SQLException excep) {
-                        LOGGER.error("Error in insert grantSimilarity");
-                    }
-                }
-            } finally {
-
-                if (bulkInsert != null) {
-                    bulkInsert.close();
-                }
-                connection.setAutoCommit(true);
-            }
-
-        } catch (SQLException e) {
-            // if the error message is "out of memory", 
-            // it probably means no database file is found
-            LOGGER.error(e.getMessage());
-        } finally {
-            try {
-                if (connection != null) {
-                    connection.close();
-                }
-            } catch (SQLException e) {
-                // connection close failed.
-                LOGGER.error(e);
-            }
-        }
-
-        LOGGER.info("Pub citation similarities calculation finished");
-    }
-
-    public void calcSimilarities(String SQLConnectionString, ExperimentType experimentType, String experimentId, boolean ACMAuthorSimilarity, SimilarityType similarityType, int numTopics) {
-        //calc similarities
-
-        LOGGER.info("similarities calculation Started");
-        Connection connection = null;
-        try {
-            // create a database connection
-            //connection = DriverManager.getConnection(SQLConnectionString);
-            connection = DriverManager.getConnection(SQLConnectionString);
-            Statement statement = connection.createStatement();
-
-            String sql = "";
-            String entityType = "";
-            switch (experimentType) {
-
-                case PubMed:
-                    entityType = "Project";
-                    sql = "select EntityTopicDistribution.EntityId as projectId, EntityTopicDistribution.TopicId, EntityTopicDistribution.NormWeight as Weight \n"
-                            + "                                                        from EntityTopicDistribution                                                        \n"
-                            + "                                                        where EntityTopicDistribution.EntityType='Project' \n"
-                            + "                                                        AND EntityTopicDistribution.experimentId= '" + experimentId + "'    \n"
-                            + "                                                        AND EntityTopicDistribution.EntityId<>'' and EntityTopicDistribution.NormWeight>0.03\n"
-                            + "                                                        and EntityTopicDistribution.EntityId in (Select ProjectId FROM Doc_Project GROUP BY ProjectId HAVING Count(*)>4)\n";
-
-                    break;
-                case ACM:
-                    if (ACMAuthorSimilarity) {
-                        entityType = "Author";
-                        sql = "select EntityTopicDistribution.EntityId as authorId, EntityTopicDistribution.TopicId, EntityTopicDistribution.NormWeight as Weight \n"
-                                + "                            from EntityTopicDistribution\n"
-                                + "                            where EntityTopicDistribution.EntityType='Author' AND EntityTopicDistribution.EntityId<>'' AND\n"
-                                + "                            EntityTopicDistribution.experimentId= '" + experimentId + "'   and EntityTopicDistribution.NormWeight>0.03\n"
-                                + "                            and EntityTopicDistribution.EntityId in (Select AuthorId FROM doc_author GROUP BY AuthorId HAVING Count(*)>4)\n"
-                                + "                            and EntityTopicDistribution.topicid in (select TopicId from topic \n"
-                                + "                            where topic.experimentId='" + experimentId + "' and topic.VisibilityIndex>0)";
-
-                    } else {
-                        entityType = "JournalConference";
-                        sql = "select EntityTopicDistribution.EntityId as VenueId, EntityTopicDistribution.TopicId  as TopicId, EntityTopicDistribution.NormWeight as Weight \n"
-                                + "                                                          from EntityTopicDistribution\n"
-                                + "                                                          where EntityTopicDistribution.EntityType='Journal' AND EntityTopicDistribution.EntityId<>'' AND\n"
-                                + "                                                          EntityTopicDistribution.experimentId= '" + experimentId + "'   and EntityTopicDistribution.NormWeight>0.03\n"
-                                + "                                                          and EntityTopicDistribution.EntityId in (Select ISSN FROM doc_journal GROUP BY ISSN HAVING Count(*)>100)\n"
-                                + "                                                          and EntityTopicDistribution.topicid in (select TopicId from topicdescription \n"
-                                + "                                                          where topicdescription.experimentId='" + experimentId + "' and topicdescription.VisibilityIndex=1)\n"
-                                + "          UNION                                                \n"
-                                + "select EntityTopicDistribution.EntityId as VenueId, EntityTopicDistribution.TopicId as TopicId, EntityTopicDistribution.NormWeight as Weight \n"
-                                + "                                                          from EntityTopicDistribution\n"
-                                + "                                                          where EntityTopicDistribution.EntityType='Conference' AND EntityTopicDistribution.EntityId<>'' AND\n"
-                                + "                                                          EntityTopicDistribution.experimentId= '" + experimentId + "'   and EntityTopicDistribution.NormWeight>0.03\n"
-                                + "                                                          and EntityTopicDistribution.EntityId in (Select SeriesId FROM doc_conference GROUP BY SeriesId HAVING Count(*)>400)\n"
-                                + "                                                          and EntityTopicDistribution.topicid in (select TopicId from topicdescription \n"
-                                + "                                                          where topicdescription.experimentId='" + experimentId + "' and topicdescription.VisibilityIndex=1)";
-                    }
-
-                    break;
-                default:
-            }
-
-            // String sql = "select fundedarxiv.file from fundedarxiv inner join funds on file=filename Group By fundedarxiv.file LIMIT 10" ;
-            ResultSet rs = statement.executeQuery(sql);
-
-            HashMap<String, SparseVector> labelVectors = null;
-            HashMap<String, double[]> similarityVectors = null;
-            if (similarityType == SimilarityType.cos) {
-                labelVectors = new HashMap<String, SparseVector>();
-            } else {
-                similarityVectors = new HashMap<String, double[]>();
-            }
-
-
-
-            String labelId = "";
-            int[] topics = new int[numTopics];
-            double[] weights = new double[numTopics];
-            int cnt = 0;
-            double a;
-            while (rs.next()) {
-
-                String newLabelId = "";
-
-                switch (experimentType) {
-
-                    case PubMed:
-                        newLabelId = rs.getString("projectId");
-                        break;
-
-                    case ACM:
-                        if (ACMAuthorSimilarity) {
-                            newLabelId = rs.getString("AuthorId");
-                        } else {
-                            newLabelId = rs.getString("VenueId");
-                        }
-                        break;
-
-                    default:
-                }
-
-                if (!newLabelId.equals(labelId) && !labelId.isEmpty()) {
-                    if (similarityType == SimilarityType.cos) {
-                        labelVectors.put(labelId, new SparseVector(topics, weights, topics.length, topics.length, true, true, true));
-                    } else {
-                        similarityVectors.put(labelId, weights);
-                    }
-                    topics = new int[numTopics];
-                    weights = new double[numTopics];
-                    cnt = 0;
-                }
-                labelId = newLabelId;
-                topics[cnt] = rs.getInt("TopicId");
-                weights[cnt] = rs.getDouble("Weight");
-                cnt++;
-
-            }
-
-            cnt = 0;
-            double similarity = 0;
-            double similarityThreshold = 0.15;
-            NormalizedDotProductMetric cosineSimilarity = new NormalizedDotProductMetric();
-
-            //statement.executeUpdate("create table if not exists EntitySimilarity (EntityType int, EntityId1 nvarchar(50), EntityId2 nvarchar(50), Similarity double, ExperimentId nvarchar(50)) ");
-            String deleteSQL = String.format("Delete from EntitySimilarity where  ExperimentId = '%s' and entityType='%s'", experimentId, entityType);
-            statement.executeUpdate(deleteSQL);
-
-            PreparedStatement bulkInsert = null;
-            sql = "insert into EntitySimilarity values(?,?,?,?,?);";
-
-            try {
-
-                connection.setAutoCommit(false);
-                bulkInsert = connection.prepareStatement(sql);
-
-                if (similarityType == SimilarityType.Jen_Sha_Div) {
-                    for (String fromGrantId : similarityVectors.keySet()) {
-                        boolean startCalc = false;
-
-                        for (String toGrantId : similarityVectors.keySet()) {
-                            if (!fromGrantId.equals(toGrantId) && !startCalc) {
-                                continue;
-                            } else {
-                                startCalc = true;
-                                similarity = Maths.jensenShannonDivergence(similarityVectors.get(fromGrantId), similarityVectors.get(toGrantId)); // the function returns distance not similarity
-                                if (similarity > similarityThreshold && !fromGrantId.equals(toGrantId)) {
-
-                                    bulkInsert.setString(1, entityType);
-                                    bulkInsert.setString(2, fromGrantId);
-                                    bulkInsert.setString(3, toGrantId);
-                                    bulkInsert.setDouble(4, (double) Math.round(similarity * 1000) / 1000);
-                                    bulkInsert.setString(5, experimentId);
-                                    bulkInsert.executeUpdate();
-                                }
-                            }
-                        }
-                    }
-                } else if (similarityType == SimilarityType.cos) {
-                    for (String fromGrantId : labelVectors.keySet()) {
-                        boolean startCalc = false;
-
-                        for (String toGrantId : labelVectors.keySet()) {
-                            if (!fromGrantId.equals(toGrantId) && !startCalc) {
-                                continue;
-                            } else {
-                                startCalc = true;
-                                similarity = 1 - Math.abs(cosineSimilarity.distance(labelVectors.get(fromGrantId), labelVectors.get(toGrantId))); // the function returns distance not similarity
-                                if (similarity > similarityThreshold && !fromGrantId.equals(toGrantId)) {
-                                    bulkInsert.setString(1, entityType);
-                                    bulkInsert.setString(2, fromGrantId);
-                                    bulkInsert.setString(3, toGrantId);
-                                    bulkInsert.setDouble(4, (double) Math.round(similarity * 1000) / 1000);
-                                    bulkInsert.setString(5, experimentId);
-                                    bulkInsert.executeUpdate();
-                                }
-                            }
-                        }
-                    }
-                }
-                connection.commit();
-
-            } catch (SQLException e) {
-
-                if (connection != null) {
-                    try {
-                        LOGGER.error("Transaction is being rolled back");
-                        connection.rollback();
-                    } catch (SQLException excep) {
-                        LOGGER.error("Error in insert grantSimilarity");
-                    }
-                }
-            } finally {
-
-                if (bulkInsert != null) {
-                    bulkInsert.close();
-                }
-                connection.setAutoCommit(true);
-            }
-
-        } catch (SQLException e) {
-            // if the error message is "out of memory", 
-            // it probably means no database file is found
-            LOGGER.error(e.getMessage());
-        } finally {
-            try {
-                if (connection != null) {
-                    connection.close();
-                }
-            } catch (SQLException e) {
-                // connection close failed.
-                LOGGER.error(e);
-            }
-        }
-
-        LOGGER.info("similarities calculation finished");
     }
 
     // Read data from DB and convert them to a list of instances per view (modality)
-    // Modality 0 should be text (e.g., "This a new doc. We will tokenize it later"
+    // MVTopicModelModality 0 should be text (e.g., "This a new doc. We will tokenize it later"
     // For all other modalities (metadata) we end up with a comma delimeted string (i.e., "keyword1, key phrase1, keyword2, keyword2")
     // Some modalities may be missing for some docs
     public ArrayList<ArrayList<Instance>> ReadDataFromDB(String SQLConnection, ExperimentType experimentType, byte numModalities, int limitDocs, String filter) {
@@ -1522,18 +719,6 @@ public class SciTopicFlow {
             if (experimentType == ExperimentType.ACM) {
 
                 sql = " select  docid,  citations, categories, keywords, venue, DBPediaResources from docsideinfo_view " + filter + " Order by docsideinfo_view.docId " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-
-                /*
-                if (PPRenabled == Net2BoWType.PPR) {
-                    sql = " select  docid,   citations, categories, period, keywords, venue, DBPediaResources from docsideinfo_view  Order by docsideinfo_view.docId  " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-                } else if (PPRenabled == Net2BoWType.OneWay) {
-
-                    sql = " select  docid,  citations, categories, keywords, venue, DBPediaResources from docsideinfo_view  Order by docsideinfo_view.docId " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-                } else if (PPRenabled == Net2BoWType.TwoWay) {
-                    sql = " select  docid, authors, citations, categories, keywords, venue, DBPediaResources from docsideinfo_view  Order by docsideinfo_view.docId  " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-
-                }
-                 */
             } else if (experimentType == ExperimentType.PubMed) {
                 // sql = " select  docid, keywords, meshterms, dbpediaresources  from docsideinfo_view  " + filter + " Order by docsideinfo_view.docId " + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
 
@@ -1547,24 +732,7 @@ public class SciTopicFlow {
                         + "(select projectid from projects_atleast5docs))"
                         + "Order by docsideinfo_norescount_view.docId \n"
                         + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-
-
-
                 LOGGER.info("Text SQL:\n" + txtsql);
-                /* if (D4I) {
-                    sql = "select distinct ON (docsideinfo_view.docid)  docsideinfo_view.docid, keywords, meshterms, dbpediaresources  \n"
-                            + "from docsideinfo_view  \n"
-                            + "LEFT JOIN doc_project on doc_project.docid = docsideinfo_view.docId\n"
-                            + "where batchid > '2004' and (doctype='publication' OR doctype='project_report') \n"
-                            + "and (repository = 'PubMed Central' OR  doc_project.projectid IN \n"
-                            + "(select projectid from doc_project\n"
-                            + "join document on doc_project.docid = document.id and repository = 'PubMed Central'\n"
-                            + "group by projectid\n"
-                            + "having count(*) > 5) )\n"
-                            + "Order by docsideinfo_view.docId \n"
-                            + ((limitDocs > 0) ? String.format(" LIMIT %d", limitDocs) : "");
-                }*/
-
             }
 
             LOGGER.info(" Getting text from the database");
@@ -1600,95 +768,6 @@ public class SciTopicFlow {
                     // read the result set
 
                     switch (experimentType) {
-
-                        case ACM:
-//                        instanceBuffer.get(0).add(new Instance(rs.getString("Text"), null, rs.getString("pubId"), "text"));
-                            //String txt = rs.getString("text");
-                            //instanceBuffer.get(0).add(new Instance(txt.substring(0, Math.min(txt.length() - 1, numChars)), null, rs.getString("pubId"), "text"));
-
-                            if (numModalities > 1) {
-                                String tmpJournalStr = rs.getString("Keywords");//.replace("\t", ",");
-                                if (tmpJournalStr != null && !tmpJournalStr.equals("")) {
-                                    instanceBuffer.get(1).add(new Instance(tmpJournalStr.replace('-', ' ').toLowerCase(), null, rs.getString("docid"), "Keywords"));
-                                }
-                            }
-
-                            if (numModalities > 2) {
-                                String tmpStr = rs.getString("DBPediaResources");//.replace("\t", ",");
-                                String DBPediaResourceStr = "";
-                                if (tmpStr != null && !tmpStr.equals("")) {
-                                    String[] DBPediaResources = tmpStr.trim().split(",");
-                                    for (int j = 0; j < DBPediaResources.length; j++) {
-                                        String[] pairs = DBPediaResources[j].trim().split(";");
-                                        if (pairs.length == 2) {
-                                            for (int i = 0; i < Integer.parseInt(pairs[1]); i++) {
-                                                DBPediaResourceStr += pairs[0] + ",";
-                                            }
-                                        } else {
-                                            DBPediaResourceStr += DBPediaResources[j] + ",";
-
-                                        }
-                                    }
-                                    DBPediaResourceStr = DBPediaResourceStr.substring(0, DBPediaResourceStr.length() - 1);
-                                    instanceBuffer.get(2).add(new Instance(DBPediaResourceStr, null, rs.getString("docid"), "DBPediaResource"));
-                                }
-                            }
-
-                            if (numModalities > 3) {
-                                String tmpStr = rs.getString("Categories");//.replace("\t", ",");
-                                if (tmpStr != null && !tmpStr.equals("")) {
-
-                                    instanceBuffer.get(3).add(new Instance(tmpStr, null, rs.getString("docid"), "category"));
-                                }
-                            }
-
-                            if (numModalities > 4) {
-                                String tmpStr = rs.getString("Citations");//.replace("\t", ",");
-                                String citationStr = "";
-                                if (tmpStr != null && !tmpStr.equals("")) {
-                                    String[] citations = tmpStr.trim().split(",");
-                                    for (int j = 0; j < citations.length; j++) {
-                                        String[] pairs = citations[j].trim().split(":");
-                                        if (pairs.length == 2) {
-                                            for (int i = 0; i < Integer.parseInt(pairs[1]); i++) {
-                                                citationStr += pairs[0] + ",";
-                                            }
-                                        } else {
-                                            citationStr += citations[j] + ",";
-
-                                        }
-                                    }
-                                    citationStr = citationStr.substring(0, citationStr.length() - 1);
-                                    instanceBuffer.get(4).add(new Instance(citationStr, null, rs.getString("docid"), "citation"));
-                                }
-                            }
-
-                            if (numModalities > 5) {
-                                String tmpAuthorsStr = rs.getString("Venue");//.replace("\t", ",");
-                                if (tmpAuthorsStr != null && !tmpAuthorsStr.equals("")) {
-
-                                    instanceBuffer.get(5).add(new Instance(tmpAuthorsStr, null, rs.getString("docid"), "Venue"));
-                                }
-                            }
-
-//DBPediaResources
-                            if (numModalities > 6) {
-                                String tmpAuthorsStr = rs.getString("Authors");//.replace("\t", ",");
-                                if (tmpAuthorsStr != null && !tmpAuthorsStr.equals("")) {
-
-                                    instanceBuffer.get(6).add(new Instance(tmpAuthorsStr, null, rs.getString("docid"), "author"));
-                                }
-                            }
-
-                            if (numModalities > 7) {
-                                String tmpPeriod = rs.getString("Period");//.replace("\t", ",");
-                                if (tmpPeriod != null && !tmpPeriod.equals("")) {
-
-                                    instanceBuffer.get(7).add(new Instance(tmpPeriod, null, rs.getString("docid"), "period"));
-                                }
-                            }
-
-                            break;
                         case PubMed:
                             if (numModalities > 1) {
                                 String tmpJournalStr = rs.getString("Keywords");//.replace("\t", ",");
@@ -1778,8 +857,14 @@ public class SciTopicFlow {
 
     }
 
-    public InstanceList[] ImportInstancesWithNewPipes(ArrayList<ArrayList<Instance>> instanceBuffer, ExperimentType experimentType, byte numModalities,
-            double pruneCntPerc, double pruneLblCntPerc, double pruneMaxPerc, boolean ignoreText, String csvDelimeter) {
+    public InstanceList[] ImportInstancesWithNewPipes(ArrayList<ArrayList<Instance>> instanceBuffer, Config config){
+
+        double pruneCntPerc = config.getPruneCntPerc();
+        double pruneLblCntPerc = config.getPruneLblCntPerc();
+        double pruneMaxPerc = config.getPruneMaxPerc();
+        boolean ignoreText = config.isIgnoreText();
+        int numModalities = config.getNumModalities();
+        String csvDelimeter = ";";
 
         InstanceList[] instances = new InstanceList[numModalities];
 
@@ -1806,28 +891,18 @@ public class SciTopicFlow {
             Alphabet alphabetM = new Alphabet();
             ArrayList<Pipe> pipeListCSV = new ArrayList<Pipe>();
             pipeListCSV.add(new CSV2FeatureSequence(alphabetM, csvDelimeter));
-
-            /*if (experimentType == ExperimentType.PubMed) {
-                pipeListCSV.add(new CSV2FeatureSequence(alphabetM, ";"));
-            } else {
-                pipeListCSV.add(new CSV2FeatureSequence(alphabetM, ","));
-            }*/
-            //if (m == 1 ) //keywords
-            //{
-            //  pipeListCSV.add(new FeatureSequenceRemovePlural(alphabetM));
-            //}
             instances[m] = new InstanceList(new SerialPipes(pipeListCSV));
         }
 
+
+        int textIndex = config.getModalities().indexOf(Modality.text());
         if (!ignoreText) {
             try {
-                int prunCnt = (int) Math.round(instanceBuffer.get(0).size() * pruneCntPerc);
-                GenerateStoplist(tokenizer, instanceBuffer.get(0), prunCnt, pruneMaxPerc, false);
-                instances[0].addThruPipe(instanceBuffer.get(0).iterator());
+                int prunCnt = (int) Math.round(instanceBuffer.get(textIndex).size() * pruneCntPerc);
+                GenerateStoplist(tokenizer, instanceBuffer.get(textIndex), prunCnt, pruneMaxPerc, false);
+                instances[0].addThruPipe(instanceBuffer.get(textIndex).iterator());
             } catch (IOException e) {
-                LOGGER.error("Problem adding text: "
-                        + e);
-
+                LOGGER.error("Problem adding text: " + e);
             }
         }
 
@@ -1866,15 +941,14 @@ public class SciTopicFlow {
                     }
 
                     Instance instance;
-
-                    // Next, iterate over the same list again, adding 
+                    // Next, iterate over the same list again, adding
                     //  each instance to the new list after pruning.
                     while (instances[m].size() > 0) {
                         instance = instances[m].get(0);
                         FeatureSequence fs = (FeatureSequence) instance.getData();
 
                         int prCnt = (int) Math.round(instanceBuffer.get(m).size() * pruneLblCntPerc);
-                        fs.prune(counts, newAlphabet, ((m == 3 && experimentType == ExperimentType.PubMed)) ? prCnt * 4 : prCnt);
+                        fs.prune(counts, newAlphabet, ((m == 3)) ? prCnt * 4 : prCnt);
 
                         newInstanceList.add(newPipe.instanceFrom(new Instance(fs, instance.getTarget(),
                                 instance.getName(),
@@ -1882,38 +956,26 @@ public class SciTopicFlow {
 
                         instances[m].remove(0);
                     }
-
-//                LOGGER.info("features: " + oldAlphabet.size()
-                    //                       + " -> " + newAlphabet.size());
-                    // Make the new list the official list.
                     instances[m] = newInstanceList;
-                    // Alphabet tmp = newInstanceList.getDataAlphabet();
-//                    String modAlphabetFile = dictDir + File.separator + "dict[" + m + "].txt";
-//                    try {
-//                        ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(new File(modAlphabetFile)));
-//                        oos.writeObject(tmp);
-//                        oos.close();
-//                    } catch (IOException e) {
-//                        LOGGER.error("Problem serializing modality " + m + " alphabet to file "
-//                                + txtAlphabetFile + ": " + e);
-//                    }
 
                 } else {
                     throw new UnsupportedOperationException("Pruning features from "
                             + firstInstance.getClass().getName()
                             + " is not currently supported");
                 }
-
             }
         }
         return instances;
-
     }
 
     public static void main(String[] args) throws Exception {
         Class.forName("org.postgresql.Driver");
         //Class.forName("org.sqlite.JDBC");
-        SciTopicFlow trainer = new SciTopicFlow();
+        String mode = "topicmodelling";
+        if (args.length > 0){
+            mode = args[0];
+        }
+        SciTopicFlow trainer = new SciTopicFlow(null, args);
 
     }
 }

@@ -5,16 +5,7 @@
  */
 package org.madgik.dbpediaspotlightclient;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
@@ -24,160 +15,115 @@ import java.util.concurrent.TimeUnit;
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.MultiThreadedHttpConnectionManager;
 import org.apache.log4j.Logger;
+import org.madgik.config.Config;
+import org.madgik.io.TMDataSource;
+import org.madgik.io.TMDataSourceFactory;
+import org.madgik.io.modality.DBPedia;
+import org.madgik.io.modality.Modality;
+import org.madgik.io.modality.Text;
 
 /**
  *
  * @author omiros metaxas
  */
+
 public class DBpediaAnnotator {
 
     public static Logger logger = Logger.getLogger(DBpediaAnnotator.class.getName());
-    String SQLConnectionString = "jdbc:postgresql://localhost:5432/tender?user=postgres&password=postgres&ssl=false"; //"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
     String spotlightService = "";
     int numOfThreads = 4;
     double confidence = 0.4;
+    Config config;
 
-    public enum ExperimentType {
-        PubMed,
-        ACM
+    Map<String, List<DBpediaResource>> allSemanticAnnotations = new HashMap<>();
+    Set<DBpediaResource> allResources = new HashSet<>();
 
+    public Map<String, List<DBpediaResource>> getSemanticANnotationMappings() {
+        return allSemanticAnnotations;
+    }
+    public List<Modality> getSemanticAnnotationModalityList() {
+        List<Modality> out = new ArrayList<>();
+        for(String id : allSemanticAnnotations.keySet()){
+            StringBuilder sb = new StringBuilder();
+            List<String> resources = new ArrayList<>();
+            for(DBpediaResource res : allSemanticAnnotations.get(id)) resources.add(getUsefulResource(res));
+            out.add(new DBPedia(id, String.join(":", resources)));
+        }
+        return out;
+    }
+    public Set<String> getAllSemanticResourceStrings() {
+         Set<String> out = new HashSet<>();
+        for(String id : allSemanticAnnotations.keySet()){
+            for(DBpediaResource res : allSemanticAnnotations.get(id)) out.add(getUsefulResource(res));
+        }
+        return out;
     }
 
-    public enum AnnotatorType {
+    public String getUsefulResource(DBpediaResource e){
+        if(config.getSemanticAnnotatorType().equals(DBpediaAnnotator.AnnotatorType.spotlight.name())) return e.getLink().uri;
+        if(config.getSemanticAnnotatorType().equals(AnnotatorType.tagMe.name())) return e.getLink().label;
+        return null;
+    }
 
+    public Set<DBpediaResource> getAllResources() {
+        return allResources;
+    }
+
+
+    public DBpediaAnnotator(String conf_path) {
+       config = new Config(conf_path);
+    }
+    public DBpediaAnnotator(Config config) {
+        this.config = config;
+    }
+    public enum AnnotatorType {
         spotlight,
         tagMe
-
     }
 
-    public void getPropValues(Map<String, String> runtimeProp) throws IOException {
-
-        InputStream inputStream = null;
-        try {
-            Properties prop = new Properties();
-            String propFileName = "config.properties";
-
-            inputStream = getClass().getClassLoader().getResourceAsStream(propFileName);
-
-            if (inputStream != null) {
-                prop.load(inputStream);
-            } else {
-                throw new FileNotFoundException("property file '" + propFileName + "' not found in the classpath");
-            }
-
-            if (runtimeProp != null) {
-                prop.putAll(runtimeProp);
-            }
-
-            SQLConnectionString = prop.getProperty("SQLConnectionString");
-            spotlightService = prop.getProperty("SpotlightService");
-            numOfThreads = Integer.parseInt(prop.getProperty("NumOfThreads"));
-            confidence = Double.parseDouble(prop.getProperty("Confidence"));
-
-        } catch (Exception e) {
-            logger.error("Exception in reading properties: " + e);
-
-        } finally {
-            inputStream.close();
+    List<String> uriInputs;
+    public void setSemanticDetailExtractionInputs(List<String> uris){
+        uriInputs = new ArrayList<>();
+        uriInputs.addAll(uris);
+    }
+    public void loadSemanticDetailExtractionInputs(BlockingQueue<String> newURIsQueue) throws InterruptedException {
+        TMDataSource semanticInputsIo = TMDataSourceFactory.instantiate(config.getSemanticAugmentationInput());
+        while(true){
+            String uri = semanticInputsIo.getNextSemanticDetailExtractionInput(queueSize);
+            if (uri == null) break;
+            newURIsQueue.put(uri);
         }
-
     }
 
-//    public String getSQLLitedb(ExperimentType experimentType, boolean ubuntu) {
-//        String SQLLitedb = "";//"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
-//        //File dictPath = null;
-//
-//        String dbFilename = "";
-//        String dictDir = "";
-//        if (experimentType == ExperimentType.ACM) {
-//            dbFilename = "PTMDB_ACM2016.db";
-//            if (ubuntu) {
-//                dictDir = ":/home/omiros/Projects/Datasets/ACM/";
-//            } else {
-//                dictDir = "C:\\projects\\Datasets\\ACM\\";
-//            }
-//        } else if (experimentType == ExperimentType.Tender) {
-//            dbFilename = "PTM_Tender.db";
-//            if (ubuntu) {
-//                dictDir = ":/home/omiros/Projects/Datasets/PubMed/";
-//            } else {
-//                dictDir = "C:\\projects\\Datasets\\Tender\\";
-//            }
-//        } else if (experimentType == ExperimentType.OAFullGrants) {
-//            dbFilename = "PTMDB_OpenAIRE.db";
-//            if (ubuntu) {
-//                dictDir = ":/home/omiros/Projects/Datasets/OpenAIRE/";
-//            } else {
-//                dictDir = "C:\\projects\\Datasets\\OpenAIRE\\";
-//            }
-//        } else if (experimentType == ExperimentType.LFR) {
-//            dbFilename = "LFRNetMissing40.db";
-//            if (ubuntu) {
-//                dictDir = ":/home/omiros/Projects/Datasets/OverlappingNets/";
-//            } else {
-//                dictDir = "C:\\Projects\\datasets\\OverlappingNets\\LFR\\100K\\NoNoise\\";
-//            }
-//        }
-//
-//        SQLLitedb = "jdbc:sqlite:" + dictDir + dbFilename;
-//        SQLLitedb = "jdbc:postgresql://localhost:5432/Tender?user=postgres&password=postgres&ssl=false"; //"jdbc:sqlite:C:/projects/OpenAIRE/fundedarxiv.db";
-//        
-//
-//        return SQLLitedb;
-//    }
-    public void updateResourceDetails(ExperimentType experimentType) {
-
+    public void updateResourceDetails() {
         MultiThreadedHttpConnectionManager connectionManager = new MultiThreadedHttpConnectionManager();
-
         // Passing it to the HttpClient.
         HttpClient httpClient = new HttpClient(connectionManager);
-
-        logger.info(String.format("Get new resources"));
-
         ExecutorService executor = Executors.newFixedThreadPool(numOfThreads);
-
-        Connection connection = null;
-
         int queueSize = 10000;
 
-        BlockingQueue<String> newURIsQueue = new ArrayBlockingQueue<String>(queueSize);
+        BlockingQueue<String> newURIsQueue = new ArrayBlockingQueue<>(queueSize);
 
-        logger.info(String.format("Get extra fields from dbpedia.org using %d threads", numOfThreads));
+        TMDataSource semanticOutputsIo = TMDataSourceFactory.instantiate(config.getSemanticAugmentationOutput());
+
+        logger.info(String.format("Getting extra fields from dbpedia.org using %d threads", numOfThreads));
 
         try {
-            connection = DriverManager.getConnection(SQLConnectionString);
-            String sql
-                    = //"select  URI as Resource from DBpediaResource where Label=''";
-                    //optimized query: hashing is much faster than seq scan
-                    "select distinct Resource from doc_dbpediaResource EXCEPT select URI from DBpediaResource";
-
-            connection.setAutoCommit(false);
-            Statement statement = connection.createStatement();
-            statement.setFetchSize(queueSize);
 
             for (int thread = 0; thread < numOfThreads; thread++) {
                 executor.submit(new DBpediaAnnotatorRunnable(
-                        SQLConnectionString, null,
-                        null, thread, httpClient, newURIsQueue, spotlightService.replace("x", Integer.toString(thread)), confidence
+                        semanticOutputsIo, null, null, thread, httpClient, newURIsQueue,
+                        spotlightService.replace("x", Integer.toString(thread)), confidence
                 ));
             }
 
-            ResultSet rs = statement.executeQuery(sql);
-
-            while (rs.next()) {
-                newURIsQueue.put(rs.getString("Resource"));
+            if (newURIsQueue == null)
+                loadSemanticDetailExtractionInputs(newURIsQueue);
+            else{
+                for (String uri : uriInputs) newURIsQueue.put(uri);
             }
 
-            for (int i = 0; i < numOfThreads; i++) {
-                newURIsQueue.put(DBpediaAnnotatorRunnable.RESOURCE_POISON);
-            }
-
-        } catch (SQLException e) {
-            // if the error message is "out of memory", 
-            // it probably means no database file is found
-            logger.error(e.getMessage());
-
-        } catch (InterruptedException e) {
+        }catch (InterruptedException e) {
             logger.error("thread was interrupted, shutting down obtaining new resources phase", e);
             for (int i = 0; i < numOfThreads; i++) {
                 try {
@@ -186,20 +132,8 @@ public class DBpediaAnnotator {
                     logger.error("got interrupted while sending poison to worker threads", e1);
                 }
             }
-        } finally {
-            try {
-                if (connection != null) {
-                    connection.close();
-                }
-            } catch (SQLException e) {
-                // connection close failed.
-                logger.error(e.getMessage());
-
-            }
         }
-
         executor.shutdown();
-
         try {
             executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
         } catch (InterruptedException e) {
@@ -207,85 +141,58 @@ public class DBpediaAnnotator {
         }
     }
 
-    public void annotatePubs(ExperimentType experimentType, AnnotatorType annotator) {
 
+    List<Text> pubTextInputs;
+    int queueSize = 10000;
+    public void setSemanticAugmentationInputs(List<Text> texts){
+         pubTextInputs = new ArrayList<>();
+         pubTextInputs.addAll(texts);
+    }
+    public void loadSemanticAugmentationInputs(BlockingQueue pubsQueue) throws InterruptedException {
+        final int logBatchSize = 100000;
+        int counter = 0;
+        TMDataSource semanticInputsIo = TMDataSourceFactory.instantiate(config.getSemanticAugmentationInput());
+        while (true){
+            Text element = semanticInputsIo.getNextSemanticAugmentationInput(queueSize);
+            if (element == null) break;
+            pubsQueue.put(element);
+            counter++;
+            if (counter % logBatchSize == 0) logger.info(String.format("Read total %s publications", counter));
+        }
+    }
+
+    public void annotatePubs() {
+        AnnotatorType annotator = AnnotatorType.valueOf(config.getSemanticAnnotatorType());
         // Creating MultiThreadedHttpConnectionManager
         MultiThreadedHttpConnectionManager connectionManager = new MultiThreadedHttpConnectionManager();
-        connectionManager.getParams().setDefaultMaxConnectionsPerHost(20);
-        connectionManager.getParams().setMaxTotalConnections(200);
-
         // Passing it to the HttpClient.
         HttpClient httpClient = new HttpClient(connectionManager);
+        connectionManager.getParams().setDefaultMaxConnectionsPerHost(20);
+        connectionManager.getParams().setMaxTotalConnections(200);
+        BlockingQueue<Text> pubsQueue = new ArrayBlockingQueue<>(queueSize);
 
-        //String SQLLitedb = getSQLLitedb(experimentType, false);
+        TMDataSource semanticOutputsIo = TMDataSourceFactory.instantiate(config.getSemanticAugmentationOutput());
         ExecutorService executor = Executors.newFixedThreadPool(numOfThreads);
 
-        Connection connection = null;
-
-        int queueSize = 10000;
-
-        BlockingQueue<pubText> pubsQueue = new ArrayBlockingQueue<pubText>(queueSize);
-
+        List<DBpediaAnnotatorRunnable> runnables = new ArrayList<>();
         try {
-            connection = DriverManager.getConnection(SQLConnectionString);
-            String sql = "";
-
-            if (experimentType == ExperimentType.ACM) {
-                sql = "select doctxt_view.docid, text,  COALESCE(keywords , ''::text)  as keywords \n"
-                        + "from doctxt_view \n"
-                        + "LEFT JOIN docsideinfo_view ON docsideinfo_view.docid = doctxt_view.docid \n"
-                        + "LEFT JOIN doc_dbpediaresource ON doctxt_view.docid = doc_dbpediaresource.docid \n"
-                        + "where doc_dbpediaresource.docid is null"; //   Limit 1000"
-                ;
-            } else if (experimentType == ExperimentType.PubMed) {
-
-                // optimized query: hashing is much faster than seq scan
-                sql = "select doctxt_view.docid, text,  COALESCE(keywords , ''::text) as keywords \n"
-                        + "from doctxt_view \n"
-                        + "LEFT JOIN ( SELECT doc_subject.docid,\n"
-                        + "    string_agg(DISTINCT doc_subject.subject, ','::text) AS keywords    \n"
-                        + "   FROM  doc_subject     \n"
-                        + "  GROUP BY doc_subject.docid) keywords_view ON keywords_view.docid = doctxt_view.docid \n"
-                        + "LEFT JOIN doc_dbpediaresource ON doctxt_view.docid = doc_dbpediaresource.docid \n"
-                        + "where doc_dbpediaresource.docid is null";
-            }
-
-            connection.setAutoCommit(false);
-            Statement statement = connection.createStatement();
-            statement.setFetchSize(queueSize);
-            logger.info("Get new publications");
-
             logger.info(String.format("Start annotation using %d threads, @ %s with %.2f confidence", numOfThreads, spotlightService, confidence));
-
             for (int thread = 0; thread < numOfThreads; thread++) {
-                executor.submit(new DBpediaAnnotatorRunnable(
-                        SQLConnectionString, annotator,
-                        pubsQueue, thread, httpClient, null, spotlightService.replace("x", Integer.toString(thread + 1)), confidence));
+                DBpediaAnnotatorRunnable t = new DBpediaAnnotatorRunnable(semanticOutputsIo, annotator, pubsQueue, thread, httpClient,
+                        null, spotlightService.replace("x", Integer.toString(thread + 1)), confidence);
+                runnables.add(t);
+                executor.submit(t);
             }
 
-            ResultSet rs = statement.executeQuery(sql);
-            final int logBatchSize = 100000;
-            int counter = 0;
-
-            while (rs.next()) {
-                String txt = rs.getString("keywords") + "\n" + rs.getString("text");
-                String pubId = rs.getString("docid");
-                pubsQueue.put(new pubText(pubId, txt));
-                counter++;
-                if (counter % logBatchSize == 0) {
-                    logger.info(String.format("Read total %s publications",
-                            counter));
-                }
+            if (pubsQueue == null)
+                loadSemanticAugmentationInputs(pubsQueue);
+            else{
+                for (Text pt: pubTextInputs) pubsQueue.put(pt);
             }
 
-            for (int i = 0; i < numOfThreads; i++) {
+            for (int i = 0; i < numOfThreads; i++)
                 pubsQueue.put(new PubTextPoison());
-            }
 
-        } catch (SQLException e) {
-            // if the error message is "out of memory", 
-            // it probably means no database file is found
-            logger.error(e.getMessage());
         } catch (InterruptedException e) {
             logger.error("thread was interrupted, shutting down annotation phase", e);
             for (int i = 0; i < numOfThreads; i++) {
@@ -295,37 +202,28 @@ public class DBpediaAnnotator {
                     logger.error("got interrupted while sending poison to worker threads", e1);
                 }
             }
-        } finally {
-            try {
-                if (connection != null) {
-                    connection.close();
-                }
-            } catch (SQLException e) {
-                // connection close failed.
-                logger.error(e.getMessage());
-            }
         }
-
         executor.shutdown();
-
         try {
             executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
         } catch (InterruptedException e) {
             throw new RuntimeException("execution was interrupted while awaiting submitted runnables finish", e);
         }
+        // get results
+        for(DBpediaAnnotatorRunnable t: runnables) {
+            allSemanticAnnotations.putAll(t.allEntities);
+            allResources.addAll(t.allResources);
+        }
     }
 
-    public static void main(String[] args) throws Exception {
-
+    public static void main(String[] args){
         //Class.forName("org.sqlite.JDBC");
-        Class.forName("org.postgresql.Driver");
-        DBpediaAnnotator c = new DBpediaAnnotator();
-        logger.info("DBPedia annotation started");
-        c.getPropValues(null);
+        //Class.forName("org.postgresql.Driver");
+        DBpediaAnnotator c = new DBpediaAnnotator(new Config("config.properties"));
         logger.info("DBPedia annotation: Annotate new publications");
-        c.annotatePubs(ExperimentType.PubMed, AnnotatorType.spotlight);
+        c.annotatePubs();
         logger.info("DBPedia annotation: Get extra fields from DBPedia");
-        c.updateResourceDetails(ExperimentType.PubMed);
+        c.updateResourceDetails();
 
     }
 }

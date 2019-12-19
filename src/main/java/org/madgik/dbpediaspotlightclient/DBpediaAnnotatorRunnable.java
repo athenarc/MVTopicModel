@@ -25,17 +25,8 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
-import java.sql.Statement;
 import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
 
 import org.apache.commons.httpclient.DefaultHttpMethodRetryHandler;
@@ -51,6 +42,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.madgik.dbpediaspotlightclient.DBpediaAnnotator.AnnotatorType;
+import org.madgik.io.TMDataSource;
+import org.madgik.io.modality.Text;
 
 /**
  * Simple web service-based annotation client for DBpedia Spotlight.
@@ -63,29 +56,34 @@ public class DBpediaAnnotatorRunnable implements Runnable {
 
     public static Logger logger = Logger.getLogger(DBpediaAnnotator.class.getName());
     int startDoc, numDocs;
-    final BlockingQueue<pubText> pubsQueue;
+    final BlockingQueue<Text> pubsQueue;
     final BlockingQueue<String> resourcesQueue;
-    String SQLLitedb = "";
     AnnotatorType annotator;
     int threadId = 0;
     String spotlightService;
     double confidence;
+    TMDataSource outputWriter;
+    Map<String, List<DBpediaResource>> allEntities;
+    Set<DBpediaResource> allResources;
+
 
     //private HttpClient client = new HttpClient();
     private final HttpClient httpClient;
 
     public DBpediaAnnotatorRunnable(
-            String SQLLitedb, AnnotatorType annotator,
-            BlockingQueue<pubText> pubs, int threadId, HttpClient httpClient, BlockingQueue<String> resources, String spotlightService, double confidence) {
+            TMDataSource outputWriter, AnnotatorType annotator,
+            BlockingQueue<Text> pubs, int threadId, HttpClient httpClient,
+            BlockingQueue<String> resources, String spotlightService, double confidence) {
+        this.outputWriter = outputWriter;
         this.pubsQueue = pubs;
-        this.SQLLitedb = SQLLitedb;
         this.annotator = annotator;
         this.threadId = threadId;
         this.httpClient = httpClient;
         this.resourcesQueue = resources;
         this.spotlightService = spotlightService;
         this.confidence = confidence;
-
+        allEntities = new HashMap<>();
+        allResources = new HashSet<>();
     }
 
     public String getMeSHLabelById(String meshId) {
@@ -436,17 +434,17 @@ public class DBpediaAnnotatorRunnable implements Runnable {
             long batchEntitiesRetrievalExecutionTime = 0;
             long batchEntitiesSavingExecutionTime = 0;
 
-            pubText currentPubText;
+            Text currentPubText;
 
             try {
                 while (!((currentPubText = pubsQueue.take()) instanceof PubTextPoison)) {
                     counter++;
                     long entitiesRetrievalStartTime = System.currentTimeMillis();
-                    List<DBpediaResource> entities = getDBpediaEntities(currentPubText.getText(), annotator);
+                    List<DBpediaResource> entities = getDBpediaEntities(currentPubText.getContent(), annotator);
                     long inbetweenTime = System.currentTimeMillis();
                     batchEntitiesRetrievalExecutionTime += inbetweenTime - entitiesRetrievalStartTime;
                     if (entities.size() > 0) {
-                        saveDBpediaEntities(SQLLitedb, entities, currentPubText.getPubId(), annotator);
+                        saveDBpediaEntities(entities, currentPubText.getId(), annotator);
                     }
                     batchEntitiesSavingExecutionTime += System.currentTimeMillis() - inbetweenTime;
 
@@ -535,258 +533,14 @@ public class DBpediaAnnotatorRunnable implements Runnable {
         }
     }
 
-    public void saveDBpediaEntities(String SQLLitedb, List<DBpediaResource> entities, String pubId, AnnotatorType annotator) {
-
-        Connection connection = null;
-        try {
-
-            connection = DriverManager.getConnection(SQLLitedb);
-            Statement statement = connection.createStatement();
-
-            PreparedStatement bulkInsert = null;
-            /*
-             PubId      TEXT,
-    Resource   TEXT,
-    Support    INT,
-    Count      INT     DEFAULT (1),
-    Similarity NUMERIC,
-    Mention    TEXT,
-    Confidence DOUBLE,
-    Annotator  TEXT,
-             */
-
-            String insertSql = "insert into doc_dbpediaresource (docid, Resource, Support,  similarity,  mention,confidence, annotator, count ) values (?,?,?,?,?,?,?,1)\n"
-                    + "ON CONFLICT (docid, resource,mention) DO UPDATE SET \n"
-                    + "support=EXCLUDED.Support,\n"
-                    + "similarity=EXCLUDED.similarity, \n"
-                    + " confidence=EXCLUDED.confidence, \n"
-                    + " annotator=EXCLUDED.annotator, \n"
-                    + " count=doc_dbpediaresource.count+1";
-
-            try {
-
-                connection.setAutoCommit(false);
-                bulkInsert = connection.prepareStatement(insertSql);
-                for (DBpediaResource e : entities) {
-
-                    String resource = annotator == AnnotatorType.spotlight ? e.getLink().uri : e.getLink().label;
-
-                    bulkInsert.setString(1, pubId);
-                    bulkInsert.setString(2, resource);
-                    bulkInsert.setInt(3, e.getSupport());
-                    bulkInsert.setDouble(4, e.getSimilarity());
-                    bulkInsert.setString(5, e.getMention());
-                    bulkInsert.setDouble(6, e.getConfidence());
-                    bulkInsert.setString(7, annotator.name());
-
-                    //SQlite bulkInsert.setString(8, pubId);
-                    //SQlite bulkInsert.setString(9, resource);
-                    //SQlite bulkInsert.setString(10, e.getMention());
-                    bulkInsert.executeUpdate();
-
-                }
-
-                connection.commit();
-
-            } catch (SQLException e) {
-
-                if (connection != null) {
-                    try {
-                        logger.error("Transaction is being rolled back:" + e.toString());
-                        connection.rollback();
-                    } catch (SQLException excep) {
-                        logger.error("Error in insert doc_dbpediaresource:" + e.toString());
-                    }
-                }
-            } finally {
-
-                if (bulkInsert != null) {
-                    bulkInsert.close();
-                }
-                connection.setAutoCommit(true);
-            }
-
-        } catch (SQLException e) {
-            // if the error message is "out of memory", 
-            // it probably means no database file is found
-            logger.error(e.getMessage());
-        } finally {
-            try {
-                if (connection != null) {
-                    connection.close();
-                }
-            } catch (SQLException e) {
-                // connection close failed.
-                logger.error(e);
-            }
-        }
-
-        if (annotator == AnnotatorType.tagMe) {
-            for (DBpediaResource e : entities) {
-                saveResourceDetails(e);
-            }
-        }
-
+    public void saveDBpediaEntities(List<DBpediaResource> entities, String pubId, AnnotatorType annotator) {
+        outputWriter.saveSemanticAugmentationSingleOutput(entities, pubId, annotator);
+        allEntities.put(pubId, entities);
     }
 
     public void saveResourceDetails(DBpediaResource resource) {
-
-        Connection connection = null;
-        try {
-
-            connection = DriverManager.getConnection(SQLLitedb);
-            //Statement statement = connection.createStatement();
-
-            //INSERT OR IGNORE INTO EVENTTYPE (EventTypeName) VALUES 'ANI Received'
-            String myStatement = " insert into DBpediaResource (Id, URI, label, wikiId, abstract, icd10, mesh, meshid) Values (?, ?, ?, ?, ?,?,?,?) ON CONFLICT (Id) DO NOTHING ";
-            PreparedStatement statement = connection.prepareStatement(myStatement);
-            String id = resource.getLink().uri.isEmpty() ? resource.getLink().label : resource.getLink().uri;
-
-            statement.setString(1, id);
-            statement.setString(2, resource.getLink().uri);
-            statement.setString(3, resource.getLink().label);
-            statement.setString(4, resource.getWikiId());
-            statement.setString(5, resource.getWikiAbstract());
-            statement.setString(6, resource.getIcd10());
-            statement.setString(7, resource.getMesh());
-            statement.setString(8, resource.getMeshId());
-            int result = statement.executeUpdate();
-
-            if (result > 0) {
-                PreparedStatement deletestatement = connection.prepareStatement("Delete from DBpediaResourceCategory where ResourceId=?");
-                deletestatement.setString(1, id);
-                deletestatement.executeUpdate();
-
-                deletestatement = connection.prepareStatement("Delete from DBpediaResourceAcronym where ResourceId=?");
-                deletestatement.setString(1, id);
-                deletestatement.executeUpdate();
-
-                deletestatement = connection.prepareStatement("Delete from DBpediaResourceType where ResourceId=?");
-                deletestatement.setString(1, id);
-                deletestatement.executeUpdate();
-
-                PreparedStatement bulkInsert = null;
-
-                String insertSql = "insert into DBpediaResourceCategory (ResourceId, CategoryLabel, CategoryURI) values (?,?, ?)";
-
-                try {
-
-                    connection.setAutoCommit(false);
-                    bulkInsert = connection.prepareStatement(insertSql);
-                    for (DBpediaLink category : resource.getCategories()) {
-                        bulkInsert.setString(1, id);
-                        bulkInsert.setString(2, category.label);
-                        bulkInsert.setString(3, category.uri);
-                        bulkInsert.executeUpdate();
-
-                    }
-
-                    connection.commit();
-
-                } catch (SQLException e) {
-
-                    if (connection != null) {
-                        try {
-                            logger.error("Transaction is being rolled back:" + e.toString());
-                            connection.rollback();
-                            connection.setAutoCommit(true);
-                        } catch (SQLException excep) {
-                            logger.error("Error in insert DBpediaResource Category:" + excep.toString());
-                        }
-                    }
-                } finally {
-
-                    if (bulkInsert != null) {
-                        bulkInsert.close();
-                    }
-                    connection.setAutoCommit(true);
-                }
-
-                insertSql = "insert into DBpediaResourceAcronym (ResourceId, AcronymLabel, AcronymURI) values (?,?, ?)";
-
-                try {
-
-                    connection.setAutoCommit(false);
-                    bulkInsert = connection.prepareStatement(insertSql);
-                    for (DBpediaLink acronym : resource.getAbreviations()) {
-                        bulkInsert.setString(1, id);
-                        bulkInsert.setString(2, acronym.label);
-                        bulkInsert.setString(3, acronym.uri);
-                        bulkInsert.executeUpdate();
-
-                    }
-
-                    connection.commit();
-
-                } catch (SQLException e) {
-
-                    if (connection != null) {
-                        try {
-                            logger.error("Transaction is being rolled back:" + e.toString());
-                            connection.rollback();
-                            connection.setAutoCommit(true);
-                        } catch (SQLException excep) {
-                            logger.error("Error in insert DBpediaResource Acronym:" + excep.toString());
-                        }
-                    }
-                } finally {
-
-                    if (bulkInsert != null) {
-                        bulkInsert.close();
-                    }
-                    connection.setAutoCommit(true);
-                }
-
-                insertSql = "insert into DBpediaResourceType (resourceid, typelabel, typeuri) values (?,?, ?)";
-
-                try {
-
-                    connection.setAutoCommit(false);
-                    bulkInsert = connection.prepareStatement(insertSql);
-                    for (DBpediaLink type : resource.getTypes()) {
-                        bulkInsert.setString(1, id);
-                        bulkInsert.setString(2, type.label);
-                        bulkInsert.setString(3, type.uri);
-                        bulkInsert.executeUpdate();
-
-                    }
-
-                    connection.commit();
-
-                } catch (SQLException e) {
-
-                    if (connection != null) {
-                        try {
-                            logger.error("Transaction is being rolled back:" + e.toString());
-                            connection.rollback();
-                            connection.setAutoCommit(true);
-                        } catch (SQLException excep) {
-                            logger.error("Error in insert DBpediaResource Type:" + excep.toString());
-                        }
-                    }
-                } finally {
-
-                    if (bulkInsert != null) {
-                        bulkInsert.close();
-                    }
-                    connection.setAutoCommit(true);
-                }
-
-            }
-        } catch (SQLException e) {
-            // if the error message is "out of memory", 
-            // it probably means no database file is found
-            logger.error(e.getMessage());
-        } finally {
-            try {
-                if (connection != null) {
-                    connection.close();
-                }
-            } catch (SQLException e) {
-                // connection close failed.
-                logger.error(e);
-            }
-        }
+        outputWriter.saveSemanticOutputResourceDetails(resource);
+        allResources.add(resource);
 
     }
 

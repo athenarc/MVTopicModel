@@ -34,6 +34,8 @@ import gnu.trove.list.array.TByteArrayList;
 import gnu.trove.map.hash.TIntIntHashMap;
 import gnu.trove.map.hash.TObjectIntHashMap;
 import static java.lang.Math.log;
+import static java.lang.Math.max;
+
 import java.sql.Connection;
 
 import java.sql.DriverManager;
@@ -182,7 +184,15 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         return ret;
     }
 
-    public FastQMVWVParallelTopicModel(int numberOfTopics, byte numModalities, double alpha, double beta, boolean useCycleProposals, String SQLConnectionString, boolean useTypeVectors, double vectorsLambda, boolean trainTypeVectors) {
+    public FastQMVWVParallelTopicModel(int numberOfTopics, byte numModalities, double alpha, double beta,
+                                       boolean useCycleProposals, String SQLConnectionString,
+                                       boolean useTypeVectors, double vectorsLambda, boolean trainTypeVectors) {
+        this(numberOfTopics, numModalities, alpha, beta, useCycleProposals, SQLConnectionString, useTypeVectors, vectorsLambda, trainTypeVectors, -1);
+    }
+
+    public FastQMVWVParallelTopicModel(int numberOfTopics, byte numModalities, double alpha, double beta,
+                                       boolean useCycleProposals, String SQLConnectionString,
+                                       boolean useTypeVectors, double vectorsLambda, boolean trainTypeVectors, int seed) {
 
         this.SQLConnectionString = SQLConnectionString;
         this.useTypeVectors = useTypeVectors;
@@ -223,7 +233,6 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         formatter = NumberFormat.getInstance();
         formatter.setMaximumFractionDigits(5);
 
-
         p_a = new double[numModalities][numModalities];
         p_b = new double[numModalities][numModalities];
         pMean = new double[numModalities][numModalities];; // modalities correlation
@@ -237,12 +246,8 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         tablesCnt = new double[numModalities];
         gammaView = new double[numModalities];
 
-        random = null;
-        if (randomSeed == -1) {
-            random = new Randoms();
-        } else {
-            random = new Randoms(randomSeed);
-        }
+        randomSeed = seed;
+        random = new Randoms(randomSeed);
     }
 
     public StringBuilder getExpMetadata() {
@@ -412,7 +417,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             numTypes[m] = alphabet[m].size();
             typeTotals[m] = new int[numTypes[m]];
 
-            String modInfo = "Modality<" + m + ">[" + (training[m].size() > 0 ? training[m].get(0).getSource().toString() : "-") + "] Size:" + training[m].size() + " Alphabet count: " + numTypes[m];
+            String modInfo = "MVTopicModelModality<" + m + ">[" + (training[m].size() > 0 ? training[m].get(0).getSource().toString() : "-") + "] Size:" + training[m].size() + " Alphabet count: " + numTypes[m];
             logger.info(modInfo);
             appendMetadata(modInfo);
 
@@ -874,7 +879,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         }
 
         for (Byte i = 0; i < numModalities; i++) {
-            String infoStr = "Modality<" + i + "> Max tokens per entity: " + histogramSize[i] + ", Total tokens: " + totalTokens[i];
+            String infoStr = "MVTopicModelModality<" + i + "> Max tokens per entity: " + histogramSize[i] + ", Total tokens: " + totalTokens[i];
             logger.info(infoStr);
             appendMetadata(infoStr);
 
@@ -1035,8 +1040,8 @@ public class FastQMVWVParallelTopicModel implements Serializable {
         appendMetadata("Initial NumTopics: " + numTopics + ", Modalities: " + this.numModalities + ", Iterations: " + this.numIterations);
 
         long startTime = System.currentTimeMillis();
-        int nst = 3 * numThreads / 4; //number of sampling threads
-        int nut = numThreads / 4; // number of model updating threads 
+        int nst = max(1, 3 * numThreads / 4); //number of sampling threads
+        int nut = max(1, numThreads / 4); // number of model updating threads
         final CyclicBarrier barrier = new CyclicBarrier(nst + nut + 1);//plus one for the current thread 
 
         FastQMVWVWorkerRunnable[] samplingRunnables = new FastQMVWVWorkerRunnable[nst];
@@ -1312,7 +1317,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
                                 + " wordFTreeMassCnt:" + formatter.format((double) FastQMVWVWorkerRunnable.wordFTreeMassCnt.get() / totalCnt)); //LL for eachmodality
 
                         if (iteration + 10 > numIterations) {
-                            appendMetadata("Modality<" + i + "> LL/token: " + formatter.format(ll)); //LL for eachmodality
+                            appendMetadata("MVTopicModelModality<" + i + "> LL/token: " + formatter.format(ll)); //LL for eachmodality
                             //LOGGER.info("[alphaSum[" + i + "]: " + formatter.format(alphaSum[i]) + "] ");
                         }
                     }
@@ -2411,7 +2416,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
             }
 
             skewWeight[i] = skewSum / (double) nonZeroSkewCnt;  // (double) 1 / (1 + skewSum / (double) nonZeroSkewCnt);
-            //appendMetadata("Modality<" + i + "> Discr. Weight: " + formatter.format(skewWeight[i])); //LL for eachmodality
+            //appendMetadata("MVTopicModelModality<" + i + "> Discr. Weight: " + formatter.format(skewWeight[i])); //LL for eachmodality
 
         }
 
@@ -3028,7 +3033,7 @@ public class FastQMVWVParallelTopicModel implements Serializable {
 
  
         for (byte m = 0; m < numModalities; m++) {
-            appendMetadata("Modality<" + m + "> Discr. Weight: " + formatter.format(discrWeightPerModality[m])); //LL for eachmodality
+            appendMetadata("MVTopicModelModality<" + m + "> Discr. Weight: " + formatter.format(discrWeightPerModality[m])); //LL for eachmodality
         }
 
         Connection connection = null;

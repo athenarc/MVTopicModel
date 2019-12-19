@@ -118,7 +118,7 @@ public class FastQMVWVTopicInferencer implements Serializable {
             alphabet[m] = training[m].getDataAlphabet();
             //numTypes[m] = alphabet[m].size(); //We need to keep previous (initial) size
 
-            String modInfo = "Modality<" + m + ">[" + (training[m].size() > 0 ? training[m].get(0).getSource().toString() : "-") + "] Size:" + training[m].size() + " Alphabet count: " + numTypes[m];
+            String modInfo = "MVTopicModelModality<" + m + ">[" + (training[m].size() > 0 ? training[m].get(0).getSource().toString() : "-") + "] Size:" + training[m].size() + " Alphabet count: " + numTypes[m];
             logger.info(modInfo);
 
             betaSum[m] = beta[m] * numTypes[m];
@@ -215,12 +215,12 @@ public class FastQMVWVTopicInferencer implements Serializable {
         int docsPerThread = data.size() / nst;
         int offset = 0;
 
-        //pDistr_Var = new double[numModalities][numModalities][data.size()];
         for (byte i = 0; i < numModalities; i++) {
             Arrays.fill(this.p_a[i], 0.2d);
             Arrays.fill(this.p_b[i], 1d);
         }
 
+        System.out.println(this.data.get(0).Assignments);
         for (int thread = 0; thread < nst; thread++) {
 
             // some docs may be missing at the end due to integer division
@@ -229,6 +229,7 @@ public class FastQMVWVTopicInferencer implements Serializable {
             }
 
             ConcurrentSkipListSet<Integer> inActiveTopicIndex = new ConcurrentSkipListSet<Integer>();
+
 
             samplingRunnables[thread] = new FastQMVWVWorkerRunnable(
                     numTopics,
@@ -289,6 +290,11 @@ public class FastQMVWVTopicInferencer implements Serializable {
             FastQMVWVWorkerRunnable.newMassCnt.set(0);
             FastQMVWVWorkerRunnable.topicDocMassCnt.set(0);
             FastQMVWVWorkerRunnable.wordFTreeMassCnt.set(0);
+            System.out.println("Inference iteration #" + iteration + " concluded.");
+//            for (int f :  this.data.get(0).Assignments[0].topicSequence.getFeatures()){
+//                System.out.print(f + " ");
+//                System.out.println();
+//            }
 
         }
 
@@ -334,6 +340,12 @@ public class FastQMVWVTopicInferencer implements Serializable {
     }
 
     Map<String, Map<Integer, Double>> docTopicMap;
+
+
+    /**
+     *
+     * @param threshold: document-topic weight threshold; weights under this are ignored in the output distribution
+     */
     public void computeDocumentAssignments(double threshold){
         docTopicMap = new HashMap<>();
 
@@ -661,7 +673,7 @@ public class FastQMVWVTopicInferencer implements Serializable {
         }
     }
 
-    public static FastQMVWVTopicInferencer readEntireObject(byte[] serialized){
+    public static FastQMVWVTopicInferencer readFromByteArray(byte[] serialized){
         try {
         ByteArrayInputStream bi = new ByteArrayInputStream(serialized);
         ObjectInputStream si = null;
@@ -693,7 +705,7 @@ public class FastQMVWVTopicInferencer implements Serializable {
                 ResultSet rs = statement.executeQuery(modelSelect);
                 while (rs.next()) {
                     try {
-                        topicModel = FastQMVWVTopicInferencer.readEntireObject((byte[])rs.getObject("model"));
+                        topicModel = FastQMVWVTopicInferencer.readFromByteArray((byte[])rs.getObject("model"));
 //                        byte b[] = (byte[]) rs.getObject("model");
 //                        ByteArrayInputStream bi = new ByteArrayInputStream(b);
 //                        ObjectInputStream si = new ObjectInputStream(bi);
