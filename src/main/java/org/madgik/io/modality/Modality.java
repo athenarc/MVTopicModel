@@ -1,5 +1,8 @@
 package org.madgik.io.modality;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public abstract class Modality {
     public enum type{
         text("text", Text.class), keywords("keywords", Keywords.class), mesh("mesh", Mesh.class), dbpedia("dbpedia", DBPedia.class);

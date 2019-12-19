@@ -61,6 +61,9 @@ public abstract class TMDataSource {
         return inputs.get(mod);
     }
 
+    public Map<String, List<Modality>> getRawInputs() {
+        return inputs;
+    }
     public void clearRawInputData(String mod){
         inputs.get(mod).clear();
     }

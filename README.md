@@ -31,6 +31,12 @@ Example results (multi view topics on Full ACM & OpenAccess PubMed corpora):
 
 https://1drv.ms/f/s!Aul4avjcWIHpg-Ara0PZzqHeOkyGIw
 
-### Running from Command line 
-Topic modeling: java -Xms2G -Xmx28G -cp  "MVTopicModel-1.0-SNAPSHOT.jar;lib/*" org.madgik.MVTopicModel.PTMFlow
-Semantic Annotation: java -Xms2G -Xmx28G -cp  "MVTopicModel-1.0-SNAPSHOT.jar;lib/*" org.madgik.dbpediaspotlightclient.DBpediaAnnotator
+
+## Semantic annotator
+### Installation
+Follow installation instructions for a local server from [here](https://github.com/dbpedia-spotlight/dbpedia-spotlight-model#run-your-own-server), i.e.:
+- Download the dbpedia-spotlight jar from [here](https://sourceforge.net/projects/dbpedia-spotlight/files/spotlight/dbpedia-spotlight-1.0.0.jar/download).
+- Download a language model file from [here](https://sourceforge.net/projects/dbpedia-spotlight/files/2016-10/) and extract.
+- Run locally via `java -jar dbpedia-spotlight-1.0.jar en http://localhost:2222/rest`
+
+

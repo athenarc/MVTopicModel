@@ -35,7 +35,11 @@ public class MalletAdapter {
     }
     public ArrayList<ArrayList<Instance>> makeInstances(Map<String, List<Modality>> data ){
         ArrayList<ArrayList<Instance>> instanceBuffer = new ArrayList<>();
-        for (String modality : data.keySet()) instanceBuffer.add(makeModalityInstanceCollection(data.get(modality), modality));
+        for (Modality.type modtype : Modality.type.values()) {
+            String modality = modtype.name();
+            if (!data.keySet().contains(modality)) continue;
+            instanceBuffer.add(makeModalityInstanceCollection(data.get(modality), modality));
+        }
         return instanceBuffer;
 
     }

@@ -908,7 +908,7 @@ public class SQLTMDataSource extends TMDataSource {
                 ResultSet rs = statement.executeQuery(sql);
 
                 while (rs.next()) {
-                    String docid = rstxt.getString("docid");
+                    String docid = rs.getString("docid");
 
                     if (config.getModalities().contains(Modality.keywords())){
                         String kw = rs.getString("Keywords");

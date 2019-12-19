@@ -245,7 +245,7 @@ public class Config extends Properties {
             // get the property value and print it out
             numTopics = Integer.parseInt(prop.getProperty("TopicsNumber", "400"));
             numTopWords = Integer.parseInt(prop.getProperty("TopWords", "20"));
-            modalities = Arrays.asList(prop.getProperty("modalities", "text").split(","));
+            modalities = Arrays.asList(prop.getProperty("Modalities", "text").split(","));
             numIterations = Integer.parseInt(prop.getProperty("Iterations", "800"));
             showTopicsInterval = Integer.parseInt(prop.getProperty("ShowTopicsInterval", "50"));
             numOfThreads = Integer.parseInt(prop.getProperty("NumOfThreads", "4"));
