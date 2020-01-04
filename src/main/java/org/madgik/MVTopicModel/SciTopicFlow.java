@@ -212,20 +212,20 @@ public class SciTopicFlow {
             }
         }
 
-        void computeSemanticAnnotations(TMDataSource inferenceDs, Config config){
+        void computeSemanticAnnotations(TMDataSource ds, Config config){
             if (config.getModalities().contains(Modality.type.dbpedia.name())) {
                 LOGGER.warn("Specified to extract modalities but they are already contained in the loaded inference data. Will replace.");
-                inferenceDs.clearRawInputData(Modality.type.dbpedia.name());
+                ds.clearRawInputData(Modality.type.dbpedia.name());
             }
             DBpediaAnnotator dbann = new DBpediaAnnotator(config);
             List<Text> texts = new ArrayList<>();
-            for(Modality text: inferenceDs.getRawInput(Modality.text())) texts.add((Text) text);
+            for(Modality text: ds.getRawInput(Modality.text())) texts.add((Text) text);
             dbann.setSemanticAugmentationInputs(texts);
             // run semantic augmentation and enrichment
             dbann.annotatePubs();
-            dbann.updateResourceDetails();
+            // dbann.updateResourceDetails();
             List<Modality> sems = dbann.getSemanticAnnotationModalityList();
-            inferenceDs.setRawInput(sems, Modality.type.dbpedia.name());
+            ds.setRawInput(sems, Modality.type.dbpedia.name());
         }
 
         void runInference(Config config) throws IOException {

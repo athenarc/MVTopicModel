@@ -63,40 +63,36 @@ public class CSV2FeatureSequence extends Pipe {
     public Instance pipe(Instance carrier) {
         // if (!((String) carrier.getTarget()).isEmpty()) {
         long start = System.nanoTime();
+        ArrayList<String> tokens = new ArrayList<>();
 
         try {
-
-            if (!((String) carrier.getData()).isEmpty()) {
-                ArrayList<String> tokens = new ArrayList<String>(Arrays.asList(((String) carrier.getData()).split(delimeter)));
-                ArrayList<String> curatedTokens = new ArrayList<String>();
-
-                //String[] tokens = ((String)carrier.getTarget()).split("[ \\t]");
-                for (int i = 0; i < tokens.size(); i++) {
-                    if (tokens.get(i).length() > 3 && !(stoplist.contains(tokens.get(i).toLowerCase()))) {
-                        
-                        curatedTokens.add(tokens.get(i));
-                    }
-                }
-                FeatureSequence featureSequence
-                        = new FeatureSequence((Alphabet) getAlphabet(), curatedTokens.size());
-                for (int i = 0; i < curatedTokens.size(); i++) {                   
-                        
-                        featureSequence.add(curatedTokens.get(i));
-                    
-                }
-
+            String strData = (String) carrier.getData();
+            if (strData.isEmpty()){
+                FeatureSequence featureSequence = new FeatureSequence((Alphabet) getAlphabet(), 0);
                 carrier.setData(featureSequence);
-            } else {
-                FeatureSequence featureSequence
-                        = new FeatureSequence((Alphabet) getAlphabet(), 0);
-                carrier.setData(featureSequence);
+                totalNanos += System.nanoTime() - start;
+                return carrier;
             }
-
-            totalNanos += System.nanoTime() - start;
+            tokens = new ArrayList<>(Arrays.asList(strData.split(delimeter)));
         } catch (ClassCastException cce) {
-            System.err.println("Expecting ArrayList<String>, found " + carrier.getData().getClass());
+            // System.err.println("Expecting ArrayList<String>, found " + carrier.getData().getClass());
+            FeatureSequence fs = (FeatureSequence) carrier.getData();
+            for(int feat: fs.getFeatures())
+                tokens.add((String) fs.getAlphabet().toArray()[feat]);
         }
-        //}
+
+        ArrayList<String> curatedTokens = new ArrayList<>();
+        for (int i = 0; i < tokens.size(); i++) {
+            if (tokens.get(i).length() > 3 && !(stoplist.contains(tokens.get(i).toLowerCase()))) {
+                curatedTokens.add(tokens.get(i));
+            }
+        }
+        FeatureSequence featureSequence = new FeatureSequence(getAlphabet(), curatedTokens.size());
+        for (int i = 0; i < curatedTokens.size(); i++) {
+            featureSequence.add(curatedTokens.get(i));
+        }
+        carrier.setData(featureSequence);
+        totalNanos += System.nanoTime() - start;
         return carrier;
     }
 

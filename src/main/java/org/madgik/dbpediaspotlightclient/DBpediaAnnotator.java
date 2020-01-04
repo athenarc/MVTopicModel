@@ -30,7 +30,6 @@ import org.madgik.io.modality.Text;
 public class DBpediaAnnotator {
 
     public static Logger logger = Logger.getLogger(DBpediaAnnotator.class.getName());
-    String spotlightService = "";
     int numOfThreads = 4;
     double confidence = 0.4;
     Config config;
@@ -44,10 +43,9 @@ public class DBpediaAnnotator {
     public List<Modality> getSemanticAnnotationModalityList() {
         List<Modality> out = new ArrayList<>();
         for(String id : allSemanticAnnotations.keySet()){
-            StringBuilder sb = new StringBuilder();
             List<String> resources = new ArrayList<>();
             for(DBpediaResource res : allSemanticAnnotations.get(id)) resources.add(getUsefulResource(res));
-            out.add(new DBPedia(id, String.join(":", resources)));
+            out.add(new DBPedia(id, String.join(";", resources)));
         }
         return out;
     }
@@ -60,8 +58,8 @@ public class DBpediaAnnotator {
     }
 
     public String getUsefulResource(DBpediaResource e){
-        if(config.getSemanticAnnotatorType().equals(DBpediaAnnotator.AnnotatorType.spotlight.name())) return e.getLink().uri;
-        if(config.getSemanticAnnotatorType().equals(AnnotatorType.tagMe.name())) return e.getLink().label;
+        if(config.getSemanticAugmentationInput().getType().equals(DBpediaAnnotator.AnnotatorType.spotlight.name())) return e.getLink().uri;
+        if(config.getSemanticAugmentationInput().getType().equals(AnnotatorType.tagMe.name())) return e.getLink().label;
         return null;
     }
 
@@ -105,6 +103,8 @@ public class DBpediaAnnotator {
         BlockingQueue<String> newURIsQueue = new ArrayBlockingQueue<>(queueSize);
 
         TMDataSource semanticOutputsIo = TMDataSourceFactory.instantiate(config.getSemanticAugmentationOutput());
+        AnnotatorType annotator = AnnotatorType.valueOf(config.getSemanticAugmentationInput().getType());
+        String inputParams = config.getSemanticAugmentationInput().getParams();
 
         logger.info(String.format("Getting extra fields from dbpedia.org using %d threads", numOfThreads));
 
@@ -113,7 +113,7 @@ public class DBpediaAnnotator {
             for (int thread = 0; thread < numOfThreads; thread++) {
                 executor.submit(new DBpediaAnnotatorRunnable(
                         semanticOutputsIo, null, null, thread, httpClient, newURIsQueue,
-                        spotlightService.replace("x", Integer.toString(thread)), confidence
+                        inputParams.replace("x", Integer.toString(thread)), confidence
                 ));
             }
 
@@ -162,7 +162,8 @@ public class DBpediaAnnotator {
     }
 
     public void annotatePubs() {
-        AnnotatorType annotator = AnnotatorType.valueOf(config.getSemanticAnnotatorType());
+        AnnotatorType annotator = AnnotatorType.valueOf(config.getSemanticAugmentationInput().getType());
+        String inputParams = config.getSemanticAugmentationInput().getParams();
         // Creating MultiThreadedHttpConnectionManager
         MultiThreadedHttpConnectionManager connectionManager = new MultiThreadedHttpConnectionManager();
         // Passing it to the HttpClient.
@@ -176,10 +177,10 @@ public class DBpediaAnnotator {
 
         List<DBpediaAnnotatorRunnable> runnables = new ArrayList<>();
         try {
-            logger.info(String.format("Start annotation using %d threads, @ %s with %.2f confidence", numOfThreads, spotlightService, confidence));
+            logger.info(String.format("Start annotation using %d threads, @ %s with %.2f confidence", numOfThreads, inputParams, confidence));
             for (int thread = 0; thread < numOfThreads; thread++) {
                 DBpediaAnnotatorRunnable t = new DBpediaAnnotatorRunnable(semanticOutputsIo, annotator, pubsQueue, thread, httpClient,
-                        null, spotlightService.replace("x", Integer.toString(thread + 1)), confidence);
+                        null, inputParams.replace("x", Integer.toString(thread + 1)), confidence);
                 runnables.add(t);
                 executor.submit(t);
             }

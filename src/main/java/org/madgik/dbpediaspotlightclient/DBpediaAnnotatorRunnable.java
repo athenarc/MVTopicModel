@@ -310,8 +310,12 @@ public class DBpediaAnnotatorRunnable implements Runnable {
             getMethod.addRequestHeader(new Header("Accept", "application/json"));
 
             spotlightResponse = request(getMethod);
+            if (spotlightResponse.equals("404")) throw new Exception("Spotlight returned response: 404");
 
         } catch (UnsupportedEncodingException e) {
+            logger.error(e.getMessage());
+        } catch (Exception e){
+            logger.error(e.getMessage());
         }
 
         assert spotlightResponse != null;

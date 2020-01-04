@@ -165,12 +165,6 @@ public class Config extends Properties {
         return SemanticAugmentationInput;
     }
 
-    String SemanticAnnotatorType;
-    public String getSemanticAnnotatorType(){
-        return SemanticAnnotatorType;
-    }
-
-
     public DataIOConfig getSemanticAugmentationOutput() {
         return SemanticAugmentationOutput;
     }
@@ -263,7 +257,7 @@ public class Config extends Properties {
                 seed = 1337;
                 Logger.getLogger(SciTopicFlow.LOGGERNAME).warn("No random seed supplied. Using " + seed);
             }
-            computeNewSemanticAugmentations = Boolean.parseBoolean(prop.getProperty("computeSemanticAugmentations", "false"));
+            computeNewSemanticAugmentations = Boolean.parseBoolean(prop.getProperty("ComputeSemanticAugmentations", "false"));
 
             ModellingInputDataSourceType = prop.getProperty("ModellingInputDataSourceType").trim();
             ModellingInputDataSourceParams = prop.getProperty("ModellingInputDataSourceParams").trim();
@@ -280,7 +274,6 @@ public class Config extends Properties {
             // semantic augmentation parameters
             this.SemanticAugmentationInput.readParams(prop);
             this.SemanticAugmentationOutput.readParams(prop);
-            SemanticAnnotatorType = prop.getProperty("SemanticAnnotatorType", "spotlight").trim();
 
             initModelFile = prop.getProperty("initModelFile", "");
             tagger = prop.getProperty("tagger", "openNLP");
